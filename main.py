@@ -186,6 +186,8 @@ class AnswerPredictor:
                     elif self.prompt_type == "retrieval" or self.prompt_type == "retrieval_content":
                         sampled_answer, model_response = self.get_open_book_answer(prompt)
                     else:
+                        # chain_of_thought, zero_shot_chain_of_thought, zero_shot, 5_shot all use standard sampling
+                        # chain_of_thought prompts are constructed with CoT examples in create_prompts (utils.py)
                         sampled_answer, model_response = self.sample_answer(prompt)
                     # sampled_answer = self.parse_sampled_answer(sampled_answer)
                     if sampled_answer is None:

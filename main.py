@@ -1,10 +1,3 @@
-"""
-Bureaucratic Jam Hypothesis Experiment
-
-Tests whether formatting constraints degrade reasoning capabilities by running
-198 GPQA questions through 5 constraint levels with 5 repetitions each.
-"""
-
 import csv
 import json
 import os
@@ -25,13 +18,11 @@ from tqdm import tqdm
 logfire.configure()
 logfire.instrument_pydantic_ai()
 
-# Initialize Anthropic client
-anthropic = Anthropic()
-
+# Example named tuple
 Example = namedtuple('Example', ['question', 'choice1', 'choice2', 'choice3', 'choice4', 'correct_index'])
 
-LETTER_TO_INDEX = {'A': 0, 'B': 1, 'C': 2, 'D': 3}
-CONSTRAINT_LEVELS = 5
+# base 2 config file over the six constraints
+PROMPTS = 0b1
 REPETITIONS = 5
 MODEL = "claude-opus-4-5-20251101"
 
@@ -39,9 +30,11 @@ MODEL = "claude-opus-4-5-20251101"
 def load_gpqa_dataset() -> List[Example]:
     """Load GPQA Diamond dataset from Hugging Face."""
     logfire.info("Loading GPQA Diamond dataset")
-    dataset = load_dataset("idavidrein/gpqa", "gpqa_diamond")
+    # everything is just called train
+    dataset = load_dataset("idavidrein/gpqa", "gpqa_diamond")['train']
     
     examples = []
+    # random seed for mixing results
     random.seed(0)
     
     for item in dataset:
@@ -70,9 +63,9 @@ def load_gpqa_dataset() -> List[Example]:
     return examples
 
 
-def create_prompt_level_1(example: Example) -> str:
+def create_prompt_1(example: Example) -> str:
     """Level 1 - Baseline (Control)."""
-    return f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'Answer: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
+    return f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
 
 {example.question}
 
@@ -85,9 +78,9 @@ C) {example.choice3}
 D) {example.choice4}"""
 
 
-def create_prompt_level_2(example: Example) -> str:
+def create_prompt_2(example: Example) -> str:
     """Level 2 - Agent (Strict JSON)."""
-    base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'Answer: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
+    base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
 
 {example.question}
 
@@ -99,13 +92,13 @@ C) {example.choice3}
 
 D) {example.choice4}"""
     
-    constraint = "\n\nIMPORTANT: You must output valid JSON only. The JSON must contain exactly these five keys: `initial_intuition`, `step_by_step_logic`, `potential_counterarguments`, `confidence_score_0_to_1`, and `final_answer`. The `final_answer` must be one of: A, B, C, or D."
+    constraint = "\n\nIMPORTANT: You must output valid JSON only. The JSON must contain exactly these five keys: `initial_intuition`, `step_by_step_logic`, `potential_counterarguments`, `confidence_score_0_to_1`, and `solution`."
     return base + constraint
 
 
-def create_prompt_level_3(example: Example) -> str:
+def create_prompt_3(example: Example) -> str:
     """Level 3 - Micromanager (Structural Rigidity)."""
-    base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'Answer: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
+    base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
 
 {example.question}
 
@@ -121,9 +114,9 @@ D) {example.choice4}"""
     return base + constraint
 
 
-def create_prompt_level_4(example: Example) -> str:
+def create_prompt_4(example: Example) -> str:
     """Level 4 - Pythonic Weaver (Context Switching)."""
-    base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'Answer: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
+    base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
 
 {example.question}
 
@@ -135,13 +128,13 @@ C) {example.choice3}
 
 D) {example.choice4}"""
     
-    constraint = "\n\nIMPORTANT: Write your reasoning as valid Python code. You must use python comments (`#`) for the logic, but every two lines of comments, you must insert a valid `print()` statement that summarizes the current logical state of the problem. At the end, include a comment with your final answer in the format: # Final answer: (A/B/C/D)"
+    constraint = "\n\nIMPORTANT: Write your reasoning as valid Python code. You must use python comments (`#`) for the logic, but every two lines of comments, you must insert a valid `print()` statement that summarizes the current logical state of the problem. At the end, include a comment with your final answer in the format: # Final solution: (A/B/C/D)"
     return base + constraint
 
 
-def create_prompt_level_5(example: Example) -> str:
+def create_prompt_5(example: Example) -> str:
     """Level 5 - Oulipo (Maximum Cognitive Load)."""
-    base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'Answer: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
+    base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
 
 {example.question}
 
@@ -153,45 +146,37 @@ C) {example.choice3}
 
 D) {example.choice4}"""
     
-    constraint = "\n\nIMPORTANT: Provide your reasoning step-by-step, but **do not use the letter 'e'** in your entire reasoning chain. If you use the letter 'e', you fail. At the end, clearly state your final answer in the format: Answer: (A/B/C/D)"
+    constraint = "\n\nIMPORTANT: Provide your reasoning step-by-step, but **do not use the letter 'e'** in your entire reasoning chain. If you use the letter 'e', you fail. At the end, clearly state your final answer in the format: solution: (A/B/C/D)"
+    return base + constraint
+
+
+def create_prompt_6(example: Example) -> str:
+    """Level 6 - The 16 English tokens with the largest l2 norm token embeddings in gpt oss."""
+    base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
+
+{example.question}
+
+A) {example.choice1}
+
+B) {example.choice2}
+
+C) {example.choice3}
+
+D) {example.choice4}"""
+    
+    constraint = "\n\nIMPORTANT: Do not use the following words in your reasoning: accordingly, code, ocode, The, settings, Moreover, description, Let's, This, core, utilizes, revolves, Here's, possibly, logic, thereby"
+
     return base + constraint
 
 
 PROMPT_FUNCTIONS = [
-    create_prompt_level_1,
-    create_prompt_level_2,
-    create_prompt_level_3,
-    create_prompt_level_4,
-    create_prompt_level_5,
+    create_prompt_1,
+    create_prompt_2,
+    create_prompt_3,
+    create_prompt_4,
+    create_prompt_5,
+    create_prompt_6,
 ]
-
-
-def parse_answer(response: str, constraint_level: int) -> Optional[str]:
-    """Parse A/B/C/D answer from response."""
-    # Level 2: JSON response
-    if constraint_level == 2:
-        json_match = re.search(r'\{[^{}]*"final_answer"[^{}]*\}', response, re.DOTALL)
-        if json_match:
-            try:
-                data = json.loads(json_match.group(0))
-                answer = data.get('final_answer', '').upper().strip()
-                if answer in LETTER_TO_INDEX:
-                    return answer
-            except (json.JSONDecodeError, KeyError):
-                pass
-    
-    # Level 4: Python code response
-    if constraint_level == 4:
-        match = re.search(r'#\s*Final\s+answer:\s*\(?([A-D])\)?', response, re.IGNORECASE)
-        if match:
-            return match.group(1).upper()
-    
-    # Default: Look for "Answer: X" pattern
-    match = re.search(r'Answer:\s*([A-D])', response, re.IGNORECASE)
-    if match:
-        return match.group(1).upper()
-    
-    return None
 
 
 def create_batch_requests(examples: List[Example]) -> List[Dict]:
@@ -284,7 +269,7 @@ def process_batch_results(results: List, examples: List[Example]) -> List[Dict]:
         
         parsed_answer = parse_answer(response_text, constraint_level)
         example = examples[question_id]
-        is_correct = parsed_answer and LETTER_TO_INDEX.get(parsed_answer) == example.correct_index
+        is_correct = parsed_answer and 'ABCD'[parsed_answer] == example.correct_index
         
         processed.append({
             'question_id': question_id,
@@ -366,11 +351,13 @@ def save_results_csv(processed_results: List[Dict], filename: str):
 
 def main():
     """Main experiment execution."""
-    logfire.info("Starting Bureaucratic Jam Hypothesis Experiment")
+    logfire.info(f"Starting with model {MODEL} and constraint levels {CONSTRAINT_LEVELS} and repetitions {REPETITIONS}")
     
     examples = load_gpqa_dataset()
     assert len(examples) == 198, f"Expected 198 examples, got {len(examples)}"
-    
+    exit()
+    # Initialize Anthropic client
+    anthropic = Anthropic()
     requests = create_batch_requests(examples)
     batch_id = submit_batch(requests)
     results = wait_for_batch_completion(batch_id)
@@ -385,7 +372,7 @@ def main():
         logfire.info(f"Level {level}: {accuracy:.3f} ({stats['correct']}/{stats['total']})")
     
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    save_results_csv(processed_results, f"bureaucratic_jam_results_{timestamp}.csv")
+    save_results_csv(processed_results, f"results_{timestamp}.csv")
     
     logfire.info("Experiment completed")
 

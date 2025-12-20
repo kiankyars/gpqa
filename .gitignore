@@ -136,3 +136,4 @@ notebooks/
 logs/*
 *.pkl
 wandb/
+data

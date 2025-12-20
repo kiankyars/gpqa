@@ -31,7 +31,7 @@ def load_gpqa_dataset() -> List[Example]:
     """Load GPQA Diamond dataset from Hugging Face."""
     logfire.info("Loading GPQA Diamond dataset")
     # everything is just called train
-    dataset = load_dataset("idavidrein/gpqa", "gpqa_diamond")['train']
+    dataset = load_dataset("idavidrein/gpqa", "gpqa_diamond",cache_dir="data")['train']
     
     examples = []
     # random seed for mixing results
@@ -189,15 +189,17 @@ PROMPT_FUNCTIONS = [
 ]
 
 
-def create_batch_requests(examples: List[Example]) -> List[Dict]:
+def create_batch_requests(examples: List[Example], prompts_mask) -> List[Dict]:
     """Create batch API requests in cyclic order."""
     requests = []
-    
-    for repetition in range(1, REPETITIONS + 1):
-        for constraint_level in range(1, CONSTRAINT_LEVELS + 1):
+    # Identify which levels are enabled via bitmask
+    enabled_prompts = [i for i in range(len(PROMPT_FUNCTIONS)) if (prompts_mask >> i) & 1]
+    # print(type(enabled_prompts[0]))
+    for repetition in range(REPETITIONS):
+        for prompt_index in enabled_prompts:
             for question_id, example in enumerate(examples):
-                prompt = PROMPT_FUNCTIONS[constraint_level - 1](example)
-                custom_id = f"q{question_id}_c{constraint_level}_r{repetition}"
+                prompt = PROMPT_FUNCTIONS[prompt_index](example)
+                custom_id = f"q{question_id}_p{prompt_index}_r{repetition}"
                 
                 requests.append({
                     "custom_id": custom_id,
@@ -215,12 +217,11 @@ def create_batch_requests(examples: List[Example]) -> List[Dict]:
                     },
                     "messages": [{"role": "user", "content": prompt}],
                 })
-    
     logfire.info(f"Created {len(requests)} batch requests")
     return requests
 
 
-def submit_batch(requests: List[Dict]) -> str:
+def submit_batch(requests: List[Dict], anthropic) -> str:
     """Submit batch to Anthropic API."""
     logfire.info(f"Submitting batch with {len(requests)} requests")
     batch = anthropic.beta.messages.Batches.create(requests=requests)
@@ -228,7 +229,7 @@ def submit_batch(requests: List[Dict]) -> str:
     return batch.id
 
 
-def wait_for_batch_completion(batch_id: str) -> List:
+def wait_for_batch_completion(batch_id: str, anthropic) -> List:
     """Wait for batch to complete and return results."""
     import time
     while True:
@@ -238,8 +239,7 @@ def wait_for_batch_completion(batch_id: str) -> List:
             break
         if batch.processing_status in ["cancelled", "expired", "failed"]:
             raise RuntimeError(f"Batch failed: {batch.processing_status}")
-        time.sleep(30)
-    
+        time.sleep(60)
     results = anthropic.beta.messages.Batches.retrieve_results(batch_id)
     logfire.info(f"Retrieved {len(results)} results")
     return results
@@ -277,18 +277,19 @@ def process_batch_results(results: List, examples: List[Example]) -> List[Dict]:
             elif isinstance(output, str):
                 response_text = output
         
-        parsed_answer = parse_answer(response_text, constraint_level)
-        example = examples[question_id]
-        is_correct = parsed_answer and 'ABCD'[parsed_answer] == example.correct_index
+        match = re.search(r'solution:\s*([A-D])', response_text, re.IGNORECASE)
+        extracted_answer = match.group(1) if match else None
+        correct_answer = examples[question_id].correct_index
+        score = 1.0 if extracted_answer == correct_answer else 0.0
         
         processed.append({
             'question_id': question_id,
             'constraint_level': constraint_level,
             'repetition': repetition,
-            'parsed_answer': parsed_answer,
-            'correct': is_correct,
+            'parsed_answer': extracted_answer,
+            'correct': score,
             'raw_response': response_text,
-            'expected_answer': list(LETTER_TO_INDEX.keys())[example.correct_index],
+            'expected_answer': correct_answer,
         })
     
     return processed
@@ -296,7 +297,6 @@ def process_batch_results(results: List, examples: List[Example]) -> List[Dict]:
 
 class AccuracyEvaluator(Evaluator[str, str]):
     """Custom evaluator for accuracy calculation."""
-    
     def evaluate(self, ctx: EvaluatorContext[str, str]) -> float:
         return 1.0 if ctx.output == ctx.expected_output else 0.0
 
@@ -365,10 +365,10 @@ def main():
     
     examples = load_gpqa_dataset()
     assert len(examples) == 198, f"Expected 198 examples, got {len(examples)}"
+    requests = create_batch_requests(examples, PROMPTS)
     exit()
     # Initialize Anthropic client
     anthropic = Anthropic()
-    requests = create_batch_requests(examples)
     batch_id = submit_batch(requests)
     results = wait_for_batch_completion(batch_id)
     processed_results = process_batch_results(results, examples)

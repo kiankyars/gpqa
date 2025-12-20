@@ -243,6 +243,8 @@ def save_results_jsonl(processed_results, filename):
                 ])
     
     logfire.info(f"Saved results to {filepath}")
+
+
 def create_smoke_test_request(example, prompt_index=0):
     """Create a single request for testing purposes."""
     prompt_text = PROMPT_FUNCTIONS[prompt_index](example)
@@ -271,12 +273,13 @@ def upload_to_hf(file_path, repo_id):
         logfire.info(f"Successfully uploaded to https://huggingface.co/datasets/{repo_id}")
 
 def main():
-    with logfire.span(f"Starting experiment"):
+    with logfire.span(f"Starting with model {MODEL} and constraint levels {PROMPTS} and repetitions {REPETITIONS}"):
+
         examples = load_gpqa_dataset()
         
         # SMOKE TEST TOGGLE
-        # requests = create_smoke_test_request(examples[0])
-        requests = create_batch_requests(examples, PROMPTS)
+        requests = create_smoke_test_request(examples[0])
+        # requests = create_batch_requests(examples, PROMPTS)
         
         anthropic = Anthropic()
         batch_id = submit_batch(requests, anthropic)
@@ -285,12 +288,15 @@ def main():
         
         # Use the utility from eval_utils
         dataset, aggregated_stats = create_pydantic_evals_dataset(processed_results, examples)
-        
+        logfire.info("Accuracy by prompt level:")
+        for level in sorted(aggregated_stats.keys()):
+            stats = aggregated_stats[level]
+            accuracy = stats['correct'] / stats['total'] if stats['total'] > 0 else 0.0
+            logfire.info(f"Level {level}: {accuracy:.3f} ({stats['correct']}/{stats['total']})")
         # Save and Upload
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename = f"results_{timestamp}.csv"
         save_results_jsonl(processed_results, f"raw_results_{timestamp}.jsonl")
-        
         upload_to_hf(os.path.join("logs", filename), "kyars/gpqa-results")
 
 

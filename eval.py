@@ -41,3 +41,14 @@ def create_pydantic_evals_dataset(processed_results, examples):
     dataset = Dataset(cases=cases)
     dataset.add_evaluator(AccuracyEvaluator())
     return dataset, aggregated_stats
+
+
+
+        
+# Use the utility from eval_utils
+dataset, aggregated_stats = create_pydantic_evals_dataset(processed_results, examples)
+logfire.info("Accuracy by prompt level:")
+for level in sorted(aggregated_stats.keys()):
+    stats = aggregated_stats[level]
+    accuracy = stats['correct'] / stats['total'] if stats['total'] > 0 else 0.0
+    logfire.info(f"Level {level}: {accuracy:.3f} ({stats['correct']}/{stats['total']})")

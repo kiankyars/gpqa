@@ -1,4 +1,4 @@
-import csv
+import json
 import os
 import random
 import re
@@ -7,11 +7,10 @@ from datetime import datetime
 
 import logfire
 from anthropic import Anthropic
+from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
+from anthropic.types.messages.batch_create_params import Request
 from datasets import load_dataset
 from tqdm import tqdm
-from huggingface_hub import HfApi
-from eval import create_pydantic_evals_dataset
-
 # Initialize Logfire and instrument Pydantic AI for token tracking
 logfire.configure()
 logfire.instrument_pydantic_ai()
@@ -144,9 +143,9 @@ def create_batch_requests(examples, prompts_mask):
                 prompt_text = PROMPT_FUNCTIONS[prompt](example)
                 custom_id = f"q{question_id}_p{prompt}_r{repetition}"
                 
-                requests.append({
+                requests.append(Request({
                     "custom_id": custom_id,
-                    "params": {
+                    "params": MessageCreateParamsNonStreaming({
                         "model": MODEL,
                         "betas": ["interleaved-thinking-2025-05-14", "effort-2025-11-24"],
                         "thinking_config": {
@@ -156,44 +155,40 @@ def create_batch_requests(examples, prompts_mask):
                         "output_config": {
                             "effort": "high"
                         },
-                        "max_tokens": 4096,
-                    },
-                    "messages": [{"role": "user", "content": prompt_text}],
-                })
+                        "max_tokens": 64000,
+                        "messages": [{"role": "user", "content": prompt_text}],
+                    }),
+                }))
     with logfire.span(f"Created {len(requests)} batch requests"):
         return requests
 
 
-def submit_batch(requests, anthropic):
+def submit_batch(requests, client):
     """Submit batch to Anthropic API."""
     with logfire.span(f"Submitting batch with {len(requests)} requests"):
-        batch = anthropic.beta.messages.Batches.create(requests=requests)
+        batch = client.messages.batches.create(requests=requests)
         logfire.info(f"Batch ID: {batch.id}, status: {batch.processing_status}")
         return batch.id
 
 
-def wait_for_batch_completion(batch_id, anthropic):
+def wait_for_batch_completion(batch_id, client):
     """Wait for batch to complete and return results."""
     import time
     while True:
         with logfire.span(f"Checking status for batch {batch_id}"):
-            batch = anthropic.beta.messages.Batches.retrieve(batch_id)
-            logfire.info(f"Batch status: {batch.processing_status}")
-            if batch.processing_status == "completed":
+            batch = client.messages.batches.retrieve(batch_id)
+            logfire.info(f"Batch status: {batch.processing_status}\n{batch.request_counts}")
+            if batch.processing_status == "ended":
                 break
-            if batch.processing_status in ["cancelled", "expired", "failed"]:
-                raise RuntimeError(f"Batch failed: {batch.processing_status}")
             time.sleep(60)
-    with logfire.span("Retrieving batch results"):
-        results = anthropic.beta.messages.Batches.retrieve_results(batch_id)
-        logfire.info(f"Retrieved {len(results)} results")
-        return results
+    return batch.id
 
 
-def process_batch_results(results, examples):
+def process_batch_results(batch_id, examples, client):
     """Process batch results and extract answers."""
     processed = []
-    for result in tqdm(results, desc="Processing results"):
+    for result in tqdm(client.messages.batches.results(batch_id), desc="Processing results"):
+        print(result)
         match = re.match(r'q(\d+)_p(\d+)_r(\d+)', result.custom_id)
         question_id = int(match.group(1))
         prompt = int(match.group(2))
@@ -224,53 +219,26 @@ def process_batch_results(results, examples):
 
 def save_results_jsonl(processed_results, filename):
     """Save processed results."""
-    os.makedirs("logs", exist_ok=True)
-    filepath = os.path.join("logs", filename)
-    
+    filepath = os.path.join("data", filename)
     with logfire.span(f"Saving results to {filepath}"):
-        with open(filepath, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(['question_id', 'prompt', 'repetition', 'extracted_answer', 'score', 'correct_answer', 'response_text'])
-            for result in processed_results:
-                writer.writerow([
-                    result['question_id'],
-                    result['prompt'],
-                    result['repetition'],
-                    result['extracted_answer'],
-                    result['score'],
-                    result['correct_answer'],
-                    result['response_text'],
-                ])
-    
-    logfire.info(f"Saved results to {filepath}")
+        json.dump(processed_results, open(filepath, 'w'))
+        logfire.info(f"Saved results to {filepath}")
 
 
-def create_smoke_test_request(example, prompt_index=0):
+def create_smoke_test_request(example):
     """Create a single request for testing purposes."""
-    prompt_text = PROMPT_FUNCTIONS[prompt_index](example)
-    return [{
-        "custom_id": f"smoke_test_q0_p{prompt_index}",
-        "params": {
-            "model": MODEL,
-            "betas": ["interleaved-thinking-2025-05-14", "effort-2025-11-24"],
-            "thinking_config": {"type": "enabled", "budget_tokens": 16000}, # Lower budget for test
-            "output_config": {"effort": "high"},
-            "max_tokens": 4096,
-        },
-        "messages": [{"role": "user", "content": prompt_text}],
-    }]
-
-def upload_to_hf(file_path, repo_id):
-    """Upload the results file to Hugging Face Hub."""
-    with logfire.span(f"Uploading {file_path} to Hugging Face"):
-        api = HfApi()
-        api.upload_file(
-            path_or_fileobj=file_path,
-            path_in_repo=os.path.basename(file_path),
-            repo_id=repo_id,
-            repo_type="dataset",
-        )
-        logfire.info(f"Successfully uploaded to https://huggingface.co/datasets/{repo_id}")
+    examples = []
+    for i in range(1):
+        prompt_text = PROMPT_FUNCTIONS[i](example)
+        examples.append({
+            "custom_id": f"smoke_test_q0_p{i}",
+            "params": {
+                "model": MODEL,
+                "max_tokens": 1024,
+                "messages": [{"role": "user", "content": prompt_text}],
+            },
+        })
+    return examples
 
 def main():
     with logfire.span(f"Starting with model {MODEL} and constraint levels {PROMPTS} and repetitions {REPETITIONS}"):
@@ -281,23 +249,14 @@ def main():
         requests = create_smoke_test_request(examples[0])
         # requests = create_batch_requests(examples, PROMPTS)
         
-        anthropic = Anthropic()
-        batch_id = submit_batch(requests, anthropic)
-        results = wait_for_batch_completion(batch_id, anthropic)
-        processed_results = process_batch_results(results, examples)
-        
-        # Use the utility from eval_utils
-        dataset, aggregated_stats = create_pydantic_evals_dataset(processed_results, examples)
-        logfire.info("Accuracy by prompt level:")
-        for level in sorted(aggregated_stats.keys()):
-            stats = aggregated_stats[level]
-            accuracy = stats['correct'] / stats['total'] if stats['total'] > 0 else 0.0
-            logfire.info(f"Level {level}: {accuracy:.3f} ({stats['correct']}/{stats['total']})")
+        client = Anthropic()
+        batch_id = submit_batch(requests, client)
+        # batch_id = "msgbatch_01TPV8enrdh16z6xQwyyGHY8"
+        batch_id = wait_for_batch_completion(batch_id, client)
+        processed_results = process_batch_results(batch_id, examples, client)
         # Save and Upload
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        filename = f"results_{timestamp}.csv"
-        save_results_jsonl(processed_results, f"raw_results_{timestamp}.jsonl")
-        upload_to_hf(os.path.join("logs", filename), "kyars/gpqa-results")
+        save_results_jsonl(processed_results, f"results_{timestamp}.jsonl")
 
 
 if __name__ == "__main__":

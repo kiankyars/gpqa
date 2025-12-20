@@ -221,8 +221,11 @@ def save_results_jsonl(processed_results, filename):
     """Save processed results."""
     filepath = os.path.join("data", filename)
     with logfire.span(f"Saving results to {filepath}"):
-        json.dump(processed_results, open(filepath, 'w'))
-        logfire.info(f"Saved results to {filepath}")
+        with open(filename, 'w') as outfile:
+            for entry in processed_results:
+                json.dump(entry, outfile)
+                # Adds a newline character to create the JSONL format
+                outfile.write('\n')
 
 
 def create_smoke_test_request(example):
@@ -248,7 +251,8 @@ def main():
         # SMOKE TEST TOGGLE
         requests = create_smoke_test_request(examples[0])
         # requests = create_batch_requests(examples, PROMPTS)
-        
+        print(requests)
+        exit()
         client = Anthropic()
         batch_id = submit_batch(requests, client)
         # batch_id = "msgbatch_01TPV8enrdh16z6xQwyyGHY8"

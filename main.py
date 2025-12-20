@@ -38,18 +38,28 @@ def load_gpqa_dataset() -> List[Example]:
     random.seed(0)
     
     for item in dataset:
+        # print(item.keys())
+        # exit()
+        # grabbing the required keys for each question
+        # string
         question = item['Question']
+        # list of strings
         choices = [
             item['Correct Answer'],
             item['Incorrect Answer 1'],
             item['Incorrect Answer 2'],
             item['Incorrect Answer 3'],
         ]
+        # permutation of the list [0,1,2,3]
         permutation = list(range(4))
+        # pseudo-random shuffle
         random.shuffle(permutation)
+        # shuffled choices with list compression
         shuffled_choices = [choices[i] for i in permutation]
+        # grabbing the index of the correct answer
         correct_index = shuffled_choices.index(item['Correct Answer'])
         
+        # saving this example
         examples.append(Example(
             question=question,
             choice1=shuffled_choices[0],
@@ -60,11 +70,12 @@ def load_gpqa_dataset() -> List[Example]:
         ))
     
     logfire.info(f"Loaded {len(examples)} examples")
+    # return list of all the examples which are themselves Example types that inherits and is a child of the namedtaple class
     return examples
 
 
 def create_prompt_1(example: Example) -> str:
-    """Level 1 - Baseline (Control)."""
+    """Baseline"""
     return f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
 
 {example.question}
@@ -79,7 +90,7 @@ D) {example.choice4}"""
 
 
 def create_prompt_2(example: Example) -> str:
-    """Level 2 - Agent (Strict JSON)."""
+    """Strict JSON"""
     base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
 
 {example.question}
@@ -97,7 +108,7 @@ D) {example.choice4}"""
 
 
 def create_prompt_3(example: Example) -> str:
-    """Level 3 - Micromanager (Structural Rigidity)."""
+    """Structural Rigidity"""
     base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
 
 {example.question}
@@ -115,7 +126,7 @@ D) {example.choice4}"""
 
 
 def create_prompt_4(example: Example) -> str:
-    """Level 4 - Pythonic Weaver (Context Switching)."""
+    """Python"""
     base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
 
 {example.question}
@@ -128,12 +139,12 @@ C) {example.choice3}
 
 D) {example.choice4}"""
     
-    constraint = "\n\nIMPORTANT: Write your reasoning as valid Python code. You must use python comments (`#`) for the logic, but every two lines of comments, you must insert a valid `print()` statement that summarizes the current logical state of the problem. At the end, include a comment with your final answer in the format: # Final solution: (A/B/C/D)"
+    constraint = "\n\nIMPORTANT: Write your reasoning as valid Python code."
     return base + constraint
 
 
 def create_prompt_5(example: Example) -> str:
-    """Level 5 - Oulipo (Maximum Cognitive Load)."""
+    """Oulipo"""
     base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
 
 {example.question}
@@ -146,12 +157,12 @@ C) {example.choice3}
 
 D) {example.choice4}"""
     
-    constraint = "\n\nIMPORTANT: Provide your reasoning step-by-step, but **do not use the letter 'e'** in your entire reasoning chain. If you use the letter 'e', you fail. At the end, clearly state your final answer in the format: solution: (A/B/C/D)"
+    constraint = "\n\nIMPORTANT: Provide your reasoning step-by-step, but **do not use the letter 'e'** in your entire reasoning chain."
     return base + constraint
 
 
 def create_prompt_6(example: Example) -> str:
-    """Level 6 - The 16 English tokens with the largest l2 norm token embeddings in gpt oss."""
+    """The 16 English tokens with the largest l2 norm token embeddings in gpt oss"""
     base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
 
 {example.question}
@@ -165,7 +176,6 @@ C) {example.choice3}
 D) {example.choice4}"""
     
     constraint = "\n\nIMPORTANT: Do not use the following words in your reasoning: accordingly, code, ocode, The, settings, Moreover, description, Let's, This, core, utilizes, revolves, Here's, possibly, logic, thereby"
-
     return base + constraint
 
 
@@ -351,7 +361,7 @@ def save_results_csv(processed_results: List[Dict], filename: str):
 
 def main():
     """Main experiment execution."""
-    logfire.info(f"Starting with model {MODEL} and constraint levels {CONSTRAINT_LEVELS} and repetitions {REPETITIONS}")
+    logfire.info(f"Starting with model {MODEL} and constraint levels {PROMPTS} and repetitions {REPETITIONS}")
     
     examples = load_gpqa_dataset()
     assert len(examples) == 198, f"Expected 198 examples, got {len(examples)}"

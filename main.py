@@ -1,4 +1,5 @@
 import json
+import sys
 import os
 import random
 import re
@@ -73,7 +74,7 @@ def load_gpqa_dataset():
 
 def create_prompt_0(example):
     """Baseline"""
-    return f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
+    return f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD.
 
 {example.question}
 
@@ -130,6 +131,20 @@ PROMPT_FUNCTIONS = [
     create_prompt_5,
 ]
 
+def create_smoke_test_request(example):
+    """Create a single request for testing purposes."""
+    examples = []
+    for i in range(1):
+        prompt_text = PROMPT_FUNCTIONS[i](example)
+        examples.append(Request({
+            "custom_id": f"smoke_test_q0_p{i}",
+            "params": MessageCreateParamsNonStreaming({
+                "model": MODEL,
+                "max_tokens": 1024,
+                "messages": [{"role": "user", "content": prompt_text}],
+            }),
+        }))
+    return examples
 
 def create_batch_requests(examples, prompts_mask):
     """Create batch API requests in cyclic order."""
@@ -147,7 +162,6 @@ def create_batch_requests(examples, prompts_mask):
                     "custom_id": custom_id,
                     "params": MessageCreateParamsNonStreaming({
                         "model": MODEL,
-                        "betas": ["interleaved-thinking-2025-05-14", "effort-2025-11-24"],
                         "thinking_config": {
                             "type": "enabled",
                             "budget_tokens": 64000
@@ -166,7 +180,10 @@ def create_batch_requests(examples, prompts_mask):
 def submit_batch(requests, client):
     """Submit batch to Anthropic API."""
     with logfire.span(f"Submitting batch with {len(requests)} requests"):
-        batch = client.messages.batches.create(requests=requests)
+        batch = client.messages.batches.create(
+            requests=requests,
+            betas=["interleaved-thinking-2025-05-14", "effort-2025-11-24"]
+            )
         logfire.info(f"Batch ID: {batch.id}, status: {batch.processing_status}")
         return batch.id
 
@@ -194,7 +211,7 @@ def process_batch_results(batch_id, examples, client):
         prompt = int(match.group(2))
         repetition = int(match.group(3))
         # Extract response text
-        response_text = result.output
+        response_text = result.result.message.content.text
         match_ans = re.search(r'solution:\s*([A-D])', response_text)
         # this is the letter of the answer the model returned
         extracted_letter = match_ans.group(1) if match_ans else None
@@ -228,31 +245,14 @@ def save_results_jsonl(processed_results, filename):
                 outfile.write('\n')
 
 
-def create_smoke_test_request(example):
-    """Create a single request for testing purposes."""
-    examples = []
-    for i in range(1):
-        prompt_text = PROMPT_FUNCTIONS[i](example)
-        examples.append({
-            "custom_id": f"smoke_test_q0_p{i}",
-            "params": {
-                "model": MODEL,
-                "max_tokens": 1024,
-                "messages": [{"role": "user", "content": prompt_text}],
-            },
-        })
-    return examples
-
 def main():
-    with logfire.span(f"Starting with model {MODEL} and constraint levels {PROMPTS} and repetitions {REPETITIONS}"):
-
+    with logfire.span(f"Starting with model {MODEL}, prompts {PROMPTS}, repetitions {REPETITIONS}"):
         examples = load_gpqa_dataset()
-        
-        # SMOKE TEST TOGGLE
-        requests = create_smoke_test_request(examples[0])
-        # requests = create_batch_requests(examples, PROMPTS)
-        print(requests)
-        exit()
+        # SMOKE TEST
+        if sys.argv[1] == "smoke":
+            requests = create_smoke_test_request(examples[0])
+        else:
+            requests = create_batch_requests(examples, PROMPTS)
         client = Anthropic()
         batch_id = submit_batch(requests, client)
         # batch_id = "msgbatch_01TPV8enrdh16z6xQwyyGHY8"
@@ -260,7 +260,7 @@ def main():
         processed_results = process_batch_results(batch_id, examples, client)
         # Save and Upload
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        save_results_jsonl(processed_results, f"results_{timestamp}.jsonl")
+        save_results_jsonl(processed_results, f"results_{timestamp}_{PROMPTS}.jsonl")
 
 
 if __name__ == "__main__":

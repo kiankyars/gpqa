@@ -1,16 +1,3 @@
-[1 tool called]
-
-I understand. I will act as your senior engineering mentor.
-
-First, regarding `logfire.span` vs `logfire.info`, you are correct that `logfire.span` is generally preferred for best practices in structured logging and tracing. `logfire.span` creates a span that can encapsulate operations, providing a clearer hierarchy and context in your logs, which is excellent for debugging and performance monitoring. `logfire.info` is for simple, standalone messages. I'll make this change where appropriate.
-
-Second, I will standardize the naming conventions within the `main.py` file, focusing on consistency, especially for the batch processing results around lines 261-268.
-
-Third, I will remove all type hints from the function signatures throughout the file.
-
-Here are the proposed changes to `main.py`:
-
-```python
 import csv
 import os
 import random
@@ -42,7 +29,7 @@ def load_gpqa_dataset():
     """Load GPQA Diamond dataset from Hugging Face."""
     with logfire.span("Loading GPQA Diamond dataset"):
         # everything is just called train
-        dataset = load_dataset("idavidrein/gpqa", "gpqa_diamond",cache_dir="data")['train']
+        dataset = load_dataset("idavidrein/gpqa", "gpqa_diamond", cache_dir="data")['train']
         
         examples = []
         # random seed for mixing results
@@ -53,7 +40,7 @@ def load_gpqa_dataset():
             # exit()
             # grabbing the required keys for each question
             # string
-            question_text = item['Question']
+            question = item['Question']
             # list of strings
             choices = [
                 item['Correct Answer'],
@@ -68,16 +55,16 @@ def load_gpqa_dataset():
             # shuffled choices with list compression
             shuffled_choices = [choices[i] for i in permutation]
             # grabbing the index of the correct answer
-            correct_choice_index = shuffled_choices.index(item['Correct Answer'])
+            correct_answer = shuffled_choices.index(item['Correct Answer'])
             
             # saving this example
             examples.append(Example(
-                question=question_text,
+                question=question,
                 choice1=shuffled_choices[0],
                 choice2=shuffled_choices[1],
                 choice3=shuffled_choices[2],
                 choice4=shuffled_choices[3],
-                correct_index=correct_choice_index
+                correct_index=correct_answer
             ))
         
         logfire.info(f"Loaded {len(examples)} examples")
@@ -85,7 +72,7 @@ def load_gpqa_dataset():
         return examples
 
 
-def create_prompt_1(example):
+def create_prompt_0(example):
     """Baseline"""
     return f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
 
@@ -100,103 +87,48 @@ C) {example.choice3}
 D) {example.choice4}"""
 
 
-def create_prompt_2(example):
+def create_prompt_1(example):
     """Strict JSON"""
-    base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
-
-{example.question}
-
-A) {example.choice1}
-
-B) {example.choice2}
-
-C) {example.choice3}
-
-D) {example.choice4}"""
-    
+    base = create_prompt_0(example)
     constraint = "\n\nIMPORTANT: You must output valid JSON only. The JSON must contain exactly these five keys: `initial_intuition`, `step_by_step_logic`, `potential_counterarguments`, `confidence_score_0_to_1`, and `solution`."
     return base + constraint
 
 
-def create_prompt_3(example):
+def create_prompt_2(example):
     """Structural Rigidity"""
-    base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
-
-{example.question}
-
-A) {example.choice1}
-
-B) {example.choice2}
-
-C) {example.choice3}
-
-D) {example.choice4}"""
-    
+    base = create_prompt_0(example)
     constraint = "\n\nIMPORTANT: Your reasoning must consist of exactly three bullet points. Each bullet point must be no longer than 20 words. You must not use the word 'because' or 'therefore'."
     return base + constraint
 
 
-def create_prompt_4(example):
+def create_prompt_3(example):
     """Python"""
-    base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
-
-{example.question}
-
-A) {example.choice1}
-
-B) {example.choice2}
-
-C) {example.choice3}
-
-D) {example.choice4}"""
-    
+    base = create_prompt_0(example)
     constraint = "\n\nIMPORTANT: Write your reasoning as valid Python code."
     return base + constraint
 
 
-def create_prompt_5(example):
+def create_prompt_4(example):
     """Oulipo"""
-    base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
-
-{example.question}
-
-A) {example.choice1}
-
-B) {example.choice2}
-
-C) {example.choice3}
-
-D) {example.choice4}"""
-    
+    base = create_prompt_0(example)
     constraint = "\n\nIMPORTANT: Provide your reasoning step-by-step, but **do not use the letter 'e'** in your entire reasoning chain."
     return base + constraint
 
 
-def create_prompt_6(example):
+def create_prompt_5(example):
     """The 16 English tokens with the largest l2 norm token embeddings in gpt oss"""
-    base = f"""Answer the following multiple choice question. The last line of your response should be of the following format: 'solution: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering.
-
-{example.question}
-
-A) {example.choice1}
-
-B) {example.choice2}
-
-C) {example.choice3}
-
-D) {example.choice4}"""
-    
+    base = create_prompt_0(example)
     constraint = "\n\nIMPORTANT: Do not use the following words in your reasoning: accordingly, code, ocode, The, settings, Moreover, description, Let's, This, core, utilizes, revolves, Here's, possibly, logic, thereby"
     return base + constraint
 
 
 PROMPT_FUNCTIONS = [
+    create_prompt_0,
     create_prompt_1,
     create_prompt_2,
     create_prompt_3,
     create_prompt_4,
     create_prompt_5,
-    create_prompt_6,
 ]
 
 
@@ -206,11 +138,11 @@ def create_batch_requests(examples, prompts_mask):
     # Identify which levels are enabled via bitmask
     enabled_prompts = [i for i in range(len(PROMPT_FUNCTIONS)) if (prompts_mask >> i) & 1]
     # print(type(enabled_prompts[0]))
-    for repetition_id in range(REPETITIONS):
-        for prompt_func_index in enabled_prompts:
-            for question_number, example in enumerate(examples):
-                prompt_content = PROMPT_FUNCTIONS[prompt_func_index](example)
-                custom_id = f"q{question_number}_p{prompt_func_index}_r{repetition_id}"
+    for repetition in range(REPETITIONS):
+        for prompt in enabled_prompts:
+            for question_id, example in enumerate(examples):
+                prompt_text = PROMPT_FUNCTIONS[prompt](example)
+                custom_id = f"q{question_id}_p{prompt}_r{repetition}"
                 
                 requests.append({
                     "custom_id": custom_id,
@@ -226,7 +158,7 @@ def create_batch_requests(examples, prompts_mask):
                         },
                         "max_tokens": 4096,
                     },
-                    "messages": [{"role": "user", "content": prompt_content}],
+                    "messages": [{"role": "user", "content": prompt_text}],
                 })
     with logfire.span(f"Created {len(requests)} batch requests"):
         return requests
@@ -244,65 +176,49 @@ def wait_for_batch_completion(batch_id, anthropic):
     """Wait for batch to complete and return results."""
     import time
     while True:
-        batch = anthropic.beta.messages.Batches.retrieve(batch_id)
-        with logfire.span(f"Batch status: {batch.processing_status}"):
+        with logfire.span(f"Checking status for batch {batch_id}"):
+            batch = anthropic.beta.messages.Batches.retrieve(batch_id)
+            logfire.info(f"Batch status: {batch.processing_status}")
             if batch.processing_status == "completed":
                 break
             if batch.processing_status in ["cancelled", "expired", "failed"]:
                 raise RuntimeError(f"Batch failed: {batch.processing_status}")
             time.sleep(60)
-    results = anthropic.beta.messages.Batches.retrieve_results(batch_id)
-    with logfire.span(f"Retrieved {len(results)} results"):
+    with logfire.span("Retrieving batch results"):
+        results = anthropic.beta.messages.Batches.retrieve_results(batch_id)
+        logfire.info(f"Retrieved {len(results)} results")
         return results
 
 
 def process_batch_results(results, examples):
     """Process batch results and extract answers."""
-    processed_results = []
-    for result_item in tqdm(results, desc="Processing results"):
-        match = re.match(r'q(\d+)_p(\d+)_r(\d+)', result_item.custom_id)
-        question_identifier = int(match.group(1))
-        prompt_constraint_level = int(match.group(2))
-        repetition_number = int(match.group(3))
+    processed = []
+    for result in tqdm(results, desc="Processing results"):
+        match = re.match(r'q(\d+)_p(\d+)_r(\d+)', result.custom_id)
+        question_id = int(match.group(1))
+        prompt = int(match.group(2))
+        repetition = int(match.group(3))
+        # Extract response text
+        response_text = result.output
+        match_ans = re.search(r'solution:\s*([A-D])', response_text, re.IGNORECASE)
+        extracted_answer = match_ans.group(1) if match_ans else None
+        correct_answer = examples[question_id].correct_index
+        score = 1.0 if extracted_answer == correct_answer else 0.0
         
-        response_output_text = result_item.output
-        match = re.search(r'solution:\s*([A-D])', response_output_text, re.IGNORECASE)
-        extracted_solution = match.group(1) if match else None
-        
-        # Assuming LETTER_TO_INDEX exists or creating a mapping here
-        # For now, let's use the example's correct_index directly
-        # You'll need to define LETTER_TO_INDEX if you want to convert correct_index to a letter
-        # For this exercise, I'll assume a direct comparison is intended for 'score'
-        
-        # This part of the original code was missing `prompt` variable definition
-        # I'll create a placeholder for `prompt` for now, assuming it refers to the prompt_constraint_level
-        # The prompt itself is not directly in the result_item, it's generated via PROMPT_FUNCTIONS[prompt_constraint_level](examples[question_identifier])
-        # For the purpose of the processed_results dictionary, I'll use the prompt_constraint_level
-        
-        # The original code used `correct_answer = examples[question_id].correct_index`
-        # and then `score = 1.0 if extracted_answer == correct_answer else 0.0`
-        # This implies that `extracted_answer` should be a numerical index or converted for comparison.
-        # Given `extracted_solution` is 'A', 'B', 'C', 'D', we need a mapping.
-        LETTER_TO_INDEX = {'A': 0, 'B': 1, 'C': 2, 'D': 3}
-        extracted_solution_index = LETTER_TO_INDEX.get(extracted_solution)
-        
-        expected_correct_index = examples[question_identifier].correct_index
-        score_value = 1.0 if extracted_solution_index == expected_correct_index else 0.0
-        
-        processed_results.append({
-            'question_identifier': question_identifier,
-            'prompt_constraint_level': prompt_constraint_level,
-            'repetition_number': repetition_number,
-            'extracted_solution': extracted_solution,
-            'score_value': score_value,
-            'response_output_text': response_output_text,
-            'expected_correct_index': expected_correct_index,
+        processed.append({
+            'question_id': question_id,
+            'prompt': prompt,
+            'repetition': repetition,
+            'extracted_answer': extracted_answer,
+            'score': score,
+            'response_text': response_text,
+            'correct_answer': correct_answer,
         })
     
-    return processed_results
+    return processed
 
 
-class AccuracyEvaluator(Evaluator[str, str]):
+class AccuracyEvaluator(Evaluator):
     """Custom evaluator for accuracy calculation."""
     def evaluate(self, ctx):
         return 1.0 if ctx.output == ctx.expected_output else 0.0
@@ -315,33 +231,29 @@ def create_pydantic_evals_dataset(processed_results, examples):
     
     results_by_case = {}
     for result in processed_results:
-        key = (result['question_identifier'], result['prompt_constraint_level'])
+        key = (result['question_id'], result['prompt'])
         if key not in results_by_case:
             results_by_case[key] = []
         results_by_case[key].append(result)
     
-    for (question_identifier, prompt_constraint_level), results_list in results_by_case.items():
-        example = examples[question_identifier]
+    for (question_id, prompt), results_list in results_by_case.items():
+        example = examples[question_id]
+        expected_output = example.correct_index
         
-        # Need to define LETTER_TO_INDEX for this part as well, or pass it around
-        LETTER_TO_INDEX = {'A': 0, 'B': 1, 'C': 2, 'D': 3}
-        INDEX_TO_LETTER = {v: k for k, v in LETTER_TO_INDEX.items()}
-        expected_answer_letter = INDEX_TO_LETTER[example.correct_index]
-        
-        correct_count = sum(1 for r in results_list if r['score_value'] == 1.0) # Changed to 'score_value'
+        correct_count = sum(1 for r in results_list if r['score'] == 1.0)
         total_count = len(results_list)
         
         cases.append(Case(
-            name=f"q{question_identifier}_c{prompt_constraint_level}",
-            inputs={'question': example.question, 'constraint_level': prompt_constraint_level},
-            expected_output=expected_answer_letter,
-            metadata={'question_identifier': question_identifier, 'prompt_constraint_level': prompt_constraint_level},
+            name=f"q{question_id}_p{prompt}",
+            inputs={'question': example.question, 'prompt': prompt},
+            expected_output=str(expected_output),
+            metadata={'question_id': question_id, 'prompt': prompt},
         ))
         
-        if prompt_constraint_level not in aggregated_stats:
-            aggregated_stats[prompt_constraint_level] = {'correct': 0, 'total': 0}
-        aggregated_stats[prompt_constraint_level]['correct'] += correct_count
-        aggregated_stats[prompt_constraint_level]['total'] += total_count
+        if prompt not in aggregated_stats:
+            aggregated_stats[prompt] = {'correct': 0, 'total': 0}
+        aggregated_stats[prompt]['correct'] += correct_count
+        aggregated_stats[prompt]['total'] += total_count
     
     dataset = Dataset(cases=cases)
     dataset.add_evaluator(AccuracyEvaluator())
@@ -353,27 +265,27 @@ def save_results_csv(processed_results, filename):
     os.makedirs("logs", exist_ok=True)
     filepath = os.path.join("logs", filename)
     
-    with open(filepath, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(['question_identifier', 'prompt_constraint_level', 'repetition_number', 'extracted_solution', 'score_value', 'expected_answer_index', 'response_output_text'])
-        for result in processed_results:
-            writer.writerow([
-                result['question_identifier'],
-                result['prompt_constraint_level'],
-                result['repetition_number'],
-                result['extracted_solution'],
-                result['score_value'],
-                result['expected_correct_index'],
-                result['response_output_text'][:1000],
-            ])
+    with logfire.span(f"Saving results to {filepath}"):
+        with open(filepath, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['question_id', 'prompt', 'repetition', 'extracted_answer', 'score', 'correct_answer', 'response_text'])
+            for result in processed_results:
+                writer.writerow([
+                    result['question_id'],
+                    result['prompt'],
+                    result['repetition'],
+                    result['extracted_answer'],
+                    result['score'],
+                    result['correct_answer'],
+                    result['response_text'][:1000],
+                ])
     
-    with logfire.span(f"Saved results to {filepath}"):
-        pass # The actual saving happens above.
+    logfire.info(f"Saved results to {filepath}")
 
 
 def main():
     """Main experiment execution."""
-    with logfire.span(f"Starting with model {MODEL} and constraint levels {PROMPTS} and repetitions {REPETITIONS}"):
+    with logfire.span(f"Starting with model {MODEL} and prompt levels {PROMPTS} and repetitions {REPETITIONS}"):
         
         examples = load_gpqa_dataset()
         assert len(examples) == 198, f"Expected 198 examples, got {len(examples)}"
@@ -387,7 +299,7 @@ def main():
         
         dataset, aggregated_stats = create_pydantic_evals_dataset(processed_results, examples)
         
-        logfire.info("Accuracy by constraint level:")
+        logfire.info("Accuracy by prompt level:")
         for level in sorted(aggregated_stats.keys()):
             stats = aggregated_stats[level]
             accuracy = stats['correct'] / stats['total'] if stats['total'] > 0 else 0.0
@@ -401,4 +313,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```

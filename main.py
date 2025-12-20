@@ -8,9 +8,9 @@ from datetime import datetime
 import logfire
 from anthropic import Anthropic
 from datasets import load_dataset
-from pydantic_evals import Case, Dataset
-from pydantic_evals.evaluators import Evaluator, EvaluatorContext
 from tqdm import tqdm
+from huggingface_hub import HfApi
+from eval import create_pydantic_evals_dataset
 
 # Initialize Logfire and instrument Pydantic AI for token tracking
 logfire.configure()
@@ -200,68 +200,30 @@ def process_batch_results(results, examples):
         repetition = int(match.group(3))
         # Extract response text
         response_text = result.output
-        match_ans = re.search(r'solution:\s*([A-D])', response_text, re.IGNORECASE)
-        extracted_answer = match_ans.group(1) if match_ans else None
+        match_ans = re.search(r'solution:\s*([A-D])', response_text)
+        # this is the letter of the answer the model returned
+        extracted_letter = match_ans.group(1) if match_ans else None
+        # this is the index of the correct answer
         correct_answer = examples[question_id].correct_index
-        score = 1.0 if extracted_answer == correct_answer else 0.0
+        # this is the letter of the correct answer
+        correct_letter = 'ABCD'[correct_answer]
+        # checking if the letters are the same
+        score = 1.0 if extracted_letter == correct_letter else 0.0
         
         processed.append({
             'question_id': question_id,
             'prompt': prompt,
             'repetition': repetition,
-            'extracted_answer': extracted_answer,
+            'extracted_letter': extracted_letter,
             'score': score,
             'response_text': response_text,
             'correct_answer': correct_answer,
         })
-    
     return processed
 
 
-class AccuracyEvaluator(Evaluator):
-    """Custom evaluator for accuracy calculation."""
-    def evaluate(self, ctx):
-        return 1.0 if ctx.output == ctx.expected_output else 0.0
-
-
-def create_pydantic_evals_dataset(processed_results, examples):
-    """Create Pydantic Evals dataset from processed results."""
-    cases = []
-    aggregated_stats = {}
-    
-    results_by_case = {}
-    for result in processed_results:
-        key = (result['question_id'], result['prompt'])
-        if key not in results_by_case:
-            results_by_case[key] = []
-        results_by_case[key].append(result)
-    
-    for (question_id, prompt), results_list in results_by_case.items():
-        example = examples[question_id]
-        expected_output = example.correct_index
-        
-        correct_count = sum(1 for r in results_list if r['score'] == 1.0)
-        total_count = len(results_list)
-        
-        cases.append(Case(
-            name=f"q{question_id}_p{prompt}",
-            inputs={'question': example.question, 'prompt': prompt},
-            expected_output=str(expected_output),
-            metadata={'question_id': question_id, 'prompt': prompt},
-        ))
-        
-        if prompt not in aggregated_stats:
-            aggregated_stats[prompt] = {'correct': 0, 'total': 0}
-        aggregated_stats[prompt]['correct'] += correct_count
-        aggregated_stats[prompt]['total'] += total_count
-    
-    dataset = Dataset(cases=cases)
-    dataset.add_evaluator(AccuracyEvaluator())
-    return dataset, aggregated_stats
-
-
-def save_results_csv(processed_results, filename):
-    """Save processed results to CSV."""
+def save_results_jsonl(processed_results, filename):
+    """Save processed results."""
     os.makedirs("logs", exist_ok=True)
     filepath = os.path.join("logs", filename)
     
@@ -277,38 +239,59 @@ def save_results_csv(processed_results, filename):
                     result['extracted_answer'],
                     result['score'],
                     result['correct_answer'],
-                    result['response_text'][:1000],
+                    result['response_text'],
                 ])
     
     logfire.info(f"Saved results to {filepath}")
+def create_smoke_test_request(example, prompt_index=0):
+    """Create a single request for testing purposes."""
+    prompt_text = PROMPT_FUNCTIONS[prompt_index](example)
+    return [{
+        "custom_id": f"smoke_test_q0_p{prompt_index}",
+        "params": {
+            "model": MODEL,
+            "betas": ["interleaved-thinking-2025-05-14", "effort-2025-11-24"],
+            "thinking_config": {"type": "enabled", "budget_tokens": 16000}, # Lower budget for test
+            "output_config": {"effort": "high"},
+            "max_tokens": 4096,
+        },
+        "messages": [{"role": "user", "content": prompt_text}],
+    }]
 
+def upload_to_hf(file_path, repo_id):
+    """Upload the results file to Hugging Face Hub."""
+    with logfire.span(f"Uploading {file_path} to Hugging Face"):
+        api = HfApi()
+        api.upload_file(
+            path_or_fileobj=file_path,
+            path_in_repo=os.path.basename(file_path),
+            repo_id=repo_id,
+            repo_type="dataset",
+        )
+        logfire.info(f"Successfully uploaded to https://huggingface.co/datasets/{repo_id}")
 
 def main():
-    """Main experiment execution."""
-    with logfire.span(f"Starting with model {MODEL} and prompt levels {PROMPTS} and repetitions {REPETITIONS}"):
-        
+    with logfire.span(f"Starting experiment"):
         examples = load_gpqa_dataset()
-        assert len(examples) == 198, f"Expected 198 examples, got {len(examples)}"
+        
+        # SMOKE TEST TOGGLE
+        # requests = create_smoke_test_request(examples[0])
         requests = create_batch_requests(examples, PROMPTS)
-        exit()
-        # Initialize Anthropic client
+        
         anthropic = Anthropic()
         batch_id = submit_batch(requests, anthropic)
         results = wait_for_batch_completion(batch_id, anthropic)
         processed_results = process_batch_results(results, examples)
         
+        # Use the utility from eval_utils
         dataset, aggregated_stats = create_pydantic_evals_dataset(processed_results, examples)
         
-        logfire.info("Accuracy by prompt level:")
-        for level in sorted(aggregated_stats.keys()):
-            stats = aggregated_stats[level]
-            accuracy = stats['correct'] / stats['total'] if stats['total'] > 0 else 0.0
-            logfire.info(f"Level {level}: {accuracy:.3f} ({stats['correct']}/{stats['total']})")
-        
+        # Save and Upload
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        save_results_csv(processed_results, f"results_{timestamp}.csv")
+        filename = f"results_{timestamp}.csv"
+        save_results_jsonl(processed_results, f"raw_results_{timestamp}.jsonl")
         
-        logfire.info("Experiment completed")
+        upload_to_hf(os.path.join("logs", filename), "kyars/gpqa-results")
 
 
 if __name__ == "__main__":

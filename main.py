@@ -1,11 +1,9 @@
 import csv
-import json
 import os
 import random
 import re
 from collections import namedtuple
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
 
 import logfire
 from anthropic import Anthropic
@@ -248,35 +246,13 @@ def wait_for_batch_completion(batch_id: str, anthropic) -> List:
 def process_batch_results(results: List, examples: List[Example]) -> List[Dict]:
     """Process batch results and extract answers."""
     processed = []
-    
     for result in tqdm(results, desc="Processing results"):
-        custom_id = getattr(result, 'custom_id', None) or getattr(result, 'customId', None)
-        if not custom_id:
-            continue
-        
-        match = re.match(r'q(\d+)_c(\d+)_r(\d+)', str(custom_id))
-        if not match:
-            continue
-        
+        match = re.match(r'q(\d+)_p(\d+)_r(\d+)', results.custom_id)
         question_id = int(match.group(1))
         constraint_level = int(match.group(2))
         repetition = int(match.group(3))
-        
         # Extract response text
-        response_text = ""
-        if hasattr(result, 'output'):
-            output = result.output
-            if hasattr(output, 'text'):
-                response_text = output.text
-            elif isinstance(output, list):
-                for block in output:
-                    if hasattr(block, 'text'):
-                        response_text += block.text
-                    elif isinstance(block, dict) and 'text' in block:
-                        response_text += block['text']
-            elif isinstance(output, str):
-                response_text = output
-        
+        response_text = result.output
         match = re.search(r'solution:\s*([A-D])', response_text, re.IGNORECASE)
         extracted_answer = match.group(1) if match else None
         correct_answer = examples[question_id].correct_index
@@ -284,12 +260,12 @@ def process_batch_results(results: List, examples: List[Example]) -> List[Dict]:
         
         processed.append({
             'question_id': question_id,
-            'constraint_level': constraint_level,
+            'prompt': prompt,
             'repetition': repetition,
-            'parsed_answer': extracted_answer,
-            'correct': score,
-            'raw_response': response_text,
-            'expected_answer': correct_answer,
+            'extracted_answer': extracted_answer,
+            'score': score,
+            'response_text': response_text,
+            'correct_answer': correct_answer,
         })
     
     return processed
@@ -315,7 +291,7 @@ def create_pydantic_evals_dataset(processed_results: List[Dict], examples: List[
     
     for (question_id, constraint_level), results_list in results_by_case.items():
         example = examples[question_id]
-        expected_answer = list(LETTER_TO_INDEX.keys())[example.correct_index]
+        expected_answer = "ABCD"[example.correct_index]
         
         correct_count = sum(1 for r in results_list if r['correct'])
         total_count = len(results_list)

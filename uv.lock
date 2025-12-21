@@ -455,8 +455,12 @@ dependencies = [
     { name = "logfire" },
     { name = "pandas" },
     { name = "pydantic-evals" },
-    { name = "ruff" },
     { name = "tqdm" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "ruff" },
 ]
 
 [package.metadata]
@@ -467,9 +471,11 @@ requires-dist = [
     { name = "logfire" },
     { name = "pandas" },
     { name = "pydantic-evals" },
-    { name = "ruff", specifier = ">=0.14.10" },
     { name = "tqdm" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "ruff", specifier = ">=0.14.10" }]
 
 [[package]]
 name = "griffe"

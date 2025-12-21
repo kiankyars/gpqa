@@ -1,8 +1,4 @@
-import json
-import sys
-import os
-import random
-import re
+import json, time, sys, os, random, re
 from collections import namedtuple
 from datetime import datetime
 
@@ -182,7 +178,9 @@ def submit_batch(requests, client):
     with logfire.span(f"Submitting batch with {len(requests)} requests"):
         batch = client.messages.batches.create(
             requests=requests,
-            betas=["interleaved-thinking-2025-05-14", "effort-2025-11-24"]
+            extra_headers={
+                "anthropic-beta": "interleaved-thinking-2025-05-14,effort-2025-11-24"
+            }
             )
         logfire.info(f"Batch ID: {batch.id}, status: {batch.processing_status}")
         return batch.id
@@ -190,14 +188,16 @@ def submit_batch(requests, client):
 
 def wait_for_batch_completion(batch_id, client):
     """Wait for batch to complete and return results."""
-    import time
     while True:
         with logfire.span(f"Checking status for batch {batch_id}"):
             batch = client.messages.batches.retrieve(batch_id)
             logfire.info(f"Batch status: {batch.processing_status}\n{batch.request_counts}")
             if batch.processing_status == "ended":
                 break
-            time.sleep(60)
+            elif batch.processing_status != "in_progress":
+                exit(1)
+            else:
+                time.sleep(60)
     return batch.id
 
 
@@ -211,7 +211,8 @@ def process_batch_results(batch_id, examples, client):
         prompt = int(match.group(2))
         repetition = int(match.group(3))
         # Extract response text
-        response_text = result.result.message.content.text
+        response_text = result.result.message.content[0].text
+        print(response_text)
         match_ans = re.search(r'solution:\s*([A-D])', response_text)
         # this is the letter of the answer the model returned
         extracted_letter = match_ans.group(1) if match_ans else None

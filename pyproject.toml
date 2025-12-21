@@ -11,5 +11,9 @@ dependencies = [
     "pandas",
     "tqdm",
     "httpx==0.27.2",
+]
+
+[dependency-groups]
+dev = [
     "ruff>=0.14.10",
 ]

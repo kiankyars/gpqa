@@ -1,4 +1,4 @@
-import json, time, sys, os, random, re
+import json, sys, os, random, re
 from collections import namedtuple
 from datetime import datetime
 
@@ -16,7 +16,7 @@ logfire.instrument_pydantic_ai()
 Example = namedtuple('Example', ['question', 'choice1', 'choice2', 'choice3', 'choice4', 'correct_index'])
 
 # base 2 config file over the six constraints
-PROMPTS = 0b1
+PROMPTS = 0b000111
 REPETITIONS = 5
 MODEL = "claude-opus-4-5-20251101"
 
@@ -100,21 +100,21 @@ def create_prompt_2(example):
 def create_prompt_3(example):
     """Python"""
     base = create_prompt_0(example)
-    constraint = "\n\nIMPORTANT: Write your reasoning as valid Python code."
+    constraint = "\n\nIMPORTANT: You must write your reasoning as valid Python code."
     return base + constraint
 
 
 def create_prompt_4(example):
     """Oulipo"""
     base = create_prompt_0(example)
-    constraint = "\n\nIMPORTANT: Provide your reasoning step-by-step, but **do not use the letter 'e'** in your entire reasoning chain."
+    constraint = "\n\nIMPORTANT: You must not use the letter 'e' in your entire reasoning chain."
     return base + constraint
 
 
 def create_prompt_5(example):
     """The 16 English tokens with the largest l2 norm token embeddings in gpt oss"""
     base = create_prompt_0(example)
-    constraint = "\n\nIMPORTANT: Do not use the following words in your reasoning: accordingly, code, ocode, The, settings, Moreover, description, Let's, This, core, utilizes, revolves, Here's, possibly, logic, thereby"
+    constraint = "\n\nIMPORTANT: You must not use the following words in your reasoning: accordingly, code, ocode, The, settings, Moreover, description, Let's, This, core, utilizes, revolves, Here's, possibly, logic, thereby."
     return base + constraint
 
 
@@ -151,13 +151,13 @@ def create_batch_requests(examples, prompts_mask):
     for repetition in range(REPETITIONS):
         for prompt in enabled_prompts:
             for question_id, example in enumerate(examples):
-                prompt_text = PROMPT_FUNCTIONS[prompt](example)
+                prompt_text = PROMPT_FUNCTIONS[prompt](example).strip()
                 custom_id = f"q{question_id}_p{prompt}_r{repetition}"
                 requests.append(Request({
                     "custom_id": custom_id,
                     "params": MessageCreateParamsNonStreaming({
                         "model": MODEL,
-                        "thinking_config": {
+                        "thinking": {
                             "type": "enabled",
                             "budget_tokens": 64000
                         },
@@ -189,14 +189,13 @@ def process_batch_results(batch_id, examples, client):
     """Process batch results and extract answers."""
     processed = []
     for result in tqdm(client.messages.batches.results(batch_id), desc="Processing results"):
-        result.custom_id = f"q0_p0_r0"
         match = re.match(r'q(\d+)_p(\d+)_r(\d+)', result.custom_id)
-        print(match, result.custom_id)
+        print(match, result.custom_id, result)
         question_id = int(match.group(1))
         prompt = int(match.group(2))
         repetition = int(match.group(3))
         # Extract response text
-        response_text = result.result.message.content[0].text
+        response_text = next(block.text for block in result.result.message.content if block.type == "text")
         match_ans = re.search(r'solution:\s*([A-D])', response_text)
         # this is the letter of the answer the model returned
         extracted_letter = match_ans.group(1) if match_ans else None
@@ -233,20 +232,21 @@ def save_results_jsonl(processed_results, filename):
 
 
 def main():
-    with logfire.span(f"Starting with model {MODEL}, prompts {PROMPTS}, repetitions {REPETITIONS}"):
+    with logfire.span(f"Starting with model {MODEL}, prompts {PROMPTS:b}, repetitions {REPETITIONS}"):
         examples = load_gpqa_dataset()
-        # SMOKE TEST
-        # if sys.argv[1] == "smoke":
-        #     requests = create_smoke_test_request(examples[0])
-        # else:
-        #     requests = create_batch_requests(examples, PROMPTS)
         client = Anthropic()
-        # batch_id = submit_batch(requests, client)
-        batch_id = "msgbatch_01RQRer96YeqDVHcVmrZWS77"
-        processed_results = process_batch_results(batch_id, examples, client)
-        # Save and Upload
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        save_results_jsonl(processed_results, f"results_{timestamp}_{PROMPTS}.jsonl")
+        if sys.argv[1] == "submit":
+            if sys.argv[2] == "smoke":
+                requests = create_smoke_test_request(examples[0])
+            elif sys.argv[2] == "full":
+                requests = create_batch_requests(examples, PROMPTS)
+            submit_batch(requests, client)
+        else:
+            batch_id = sys.argv[1]
+            processed_results = process_batch_results(batch_id, examples, client)
+            # Save
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            save_results_jsonl(processed_results, f"results_{timestamp}_{PROMPTS}.jsonl")
 
 
 if __name__ == "__main__":

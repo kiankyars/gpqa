@@ -153,7 +153,6 @@ def create_batch_requests(examples, prompts_mask):
             for question_id, example in enumerate(examples):
                 prompt_text = PROMPT_FUNCTIONS[prompt](example)
                 custom_id = f"q{question_id}_p{prompt}_r{repetition}"
-                
                 requests.append(Request({
                     "custom_id": custom_id,
                     "params": MessageCreateParamsNonStreaming({
@@ -205,14 +204,12 @@ def process_batch_results(batch_id, examples, client):
     """Process batch results and extract answers."""
     processed = []
     for result in tqdm(client.messages.batches.results(batch_id), desc="Processing results"):
-        print(result)
         match = re.match(r'q(\d+)_p(\d+)_r(\d+)', result.custom_id)
         question_id = int(match.group(1))
         prompt = int(match.group(2))
         repetition = int(match.group(3))
         # Extract response text
         response_text = result.result.message.content[0].text
-        print(response_text)
         match_ans = re.search(r'solution:\s*([A-D])', response_text)
         # this is the letter of the answer the model returned
         extracted_letter = match_ans.group(1) if match_ans else None
@@ -231,6 +228,7 @@ def process_batch_results(batch_id, examples, client):
             'score': score,
             'response_text': response_text,
             'correct_answer': correct_answer,
+            'usage': result.result.message.usage
         })
     return processed
 
@@ -250,13 +248,13 @@ def main():
     with logfire.span(f"Starting with model {MODEL}, prompts {PROMPTS}, repetitions {REPETITIONS}"):
         examples = load_gpqa_dataset()
         # SMOKE TEST
-        if sys.argv[1] == "smoke":
-            requests = create_smoke_test_request(examples[0])
-        else:
-            requests = create_batch_requests(examples, PROMPTS)
+        # if sys.argv[1] == "smoke":
+        #     requests = create_smoke_test_request(examples[0])
+        # else:
+        #     requests = create_batch_requests(examples, PROMPTS)
         client = Anthropic()
-        batch_id = submit_batch(requests, client)
-        # batch_id = "msgbatch_01TPV8enrdh16z6xQwyyGHY8"
+        # batch_id = submit_batch(requests, client)
+        batch_id = "msgbatch_01RQRer96YeqDVHcVmrZWS77"
         batch_id = wait_for_batch_completion(batch_id, client)
         processed_results = process_batch_results(batch_id, examples, client)
         # Save and Upload

@@ -133,7 +133,7 @@ def create_smoke_test_request(example):
     for i in range(1):
         prompt_text = PROMPT_FUNCTIONS[i](example)
         examples.append(Request({
-            "custom_id": f"smoke_test_q0_p{i}",
+            "custom_id": f"smoke_test_q0_p{i}_r0",
             "params": MessageCreateParamsNonStreaming({
                 "model": MODEL,
                 "max_tokens": 1024,
@@ -185,26 +185,13 @@ def submit_batch(requests, client):
         return batch.id
 
 
-def wait_for_batch_completion(batch_id, client):
-    """Wait for batch to complete and return results."""
-    while True:
-        with logfire.span(f"Checking status for batch {batch_id}"):
-            batch = client.messages.batches.retrieve(batch_id)
-            logfire.info(f"Batch status: {batch.processing_status}\n{batch.request_counts}")
-            if batch.processing_status == "ended":
-                break
-            elif batch.processing_status != "in_progress":
-                exit(1)
-            else:
-                time.sleep(60)
-    return batch.id
-
-
 def process_batch_results(batch_id, examples, client):
     """Process batch results and extract answers."""
     processed = []
     for result in tqdm(client.messages.batches.results(batch_id), desc="Processing results"):
+        result.custom_id = f"q0_p0_r0"
         match = re.match(r'q(\d+)_p(\d+)_r(\d+)', result.custom_id)
+        print(match, result.custom_id)
         question_id = int(match.group(1))
         prompt = int(match.group(2))
         repetition = int(match.group(3))
@@ -226,9 +213,10 @@ def process_batch_results(batch_id, examples, client):
             'repetition': repetition,
             'extracted_letter': extracted_letter,
             'score': score,
-            'response_text': response_text,
             'correct_answer': correct_answer,
-            'usage': result.result.message.usage
+            'input_tokens': result.result.message.usage.input_tokens,
+            'output_tokens': result.result.message.usage.output_tokens,
+            'response_text': response_text,
         })
     return processed
 
@@ -237,7 +225,7 @@ def save_results_jsonl(processed_results, filename):
     """Save processed results."""
     filepath = os.path.join("data", filename)
     with logfire.span(f"Saving results to {filepath}"):
-        with open(filename, 'w') as outfile:
+        with open(filepath, 'w') as outfile:
             for entry in processed_results:
                 json.dump(entry, outfile)
                 # Adds a newline character to create the JSONL format
@@ -255,7 +243,6 @@ def main():
         client = Anthropic()
         # batch_id = submit_batch(requests, client)
         batch_id = "msgbatch_01RQRer96YeqDVHcVmrZWS77"
-        batch_id = wait_for_batch_completion(batch_id, client)
         processed_results = process_batch_results(batch_id, examples, client)
         # Save and Upload
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")

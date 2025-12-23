@@ -190,7 +190,7 @@ def process_batch_results(batch_id, examples, client):
     processed = []
     for result in tqdm(client.messages.batches.results(batch_id), desc="Processing results"):
         match = re.match(r'q(\d+)_p(\d+)_r(\d+)', result.custom_id)
-        print(match, result.custom_id, result)
+        # print(match, result.custom_id, result)
         question_id = int(match.group(1))
         prompt = int(match.group(2))
         repetition = int(match.group(3))

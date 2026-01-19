@@ -146,6 +146,3 @@ data
 *.fls
 *.out
 *.synctex.gz
-arxiv-submit/
-arxiv-submit_arXiv/
-arxiv-submit.tar.gz

@@ -13,12 +13,7 @@ arxiv: build
 	@[ -d media ] && cp -r media arxiv-submit/ || true
 	arxiv_latex_cleaner arxiv-submit --keep_bib --resize_images
 	tar -czvf arxiv-submit.tar.gz -C arxiv-submit .
-	@rm -rf arxiv-submit
+	@rm -rf arxiv-submit arxiv-submit_arXiv
 	@echo "Created arxiv-submit.tar.gz — upload to arXiv"
-
-clean:
-	latexmk -C $(MAIN).tex
-	rm -rf arxiv-submit arxiv-submit.tar.gz
-	@rm -f templateArxiv.pdf templateArxiv.aux templateArxiv.bbl templateArxiv.blg templateArxiv.fls templateArxiv.fdb_latexmk templateArxiv.out templateArxiv.synctex.gz templateArxiv.log
 
 .PHONY: build arxiv clean

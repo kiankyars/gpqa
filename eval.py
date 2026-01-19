@@ -56,16 +56,25 @@ def load_all_results(data_dir="data"):
 
 
 def create_summary_table(df):
-    """Create summary statistics table by prompt."""
-    summary = df.groupby('prompt').agg({
-        'score': ['mean', 'sum', 'count'],
+    """Create summary statistics table by prompt with error bars."""
+    # Calculate accuracy with std across repetitions
+    grouped = df.groupby(['prompt', 'repetition'])['score'].mean().reset_index()
+    accuracy_stats = grouped.groupby('prompt')['score'].agg(['mean', 'std']).sort_index()
+    
+    # Calculate token usage
+    token_stats = df.groupby('prompt').agg({
         'input_tokens': 'mean',
         'output_tokens': 'mean',
-    }).round(2)
+    }).round(0)
     
-    summary.columns = ['accuracy', 'correct', 'total', 'avg_input_tokens', 'avg_output_tokens']
-    summary['prompt_name'] = summary.index.map(PROMPT_NAMES)
-    summary = summary[['prompt_name', 'accuracy', 'correct', 'total', 'avg_input_tokens', 'avg_output_tokens']]
+    # Combine
+    summary = pd.DataFrame({
+        'prompt_name': [PROMPT_NAMES.get(i, f"Prompt {i}") for i in accuracy_stats.index],
+        'accuracy_mean': accuracy_stats['mean'].round(3),
+        'accuracy_std': accuracy_stats['std'].round(3),
+        'avg_input_tokens': token_stats['input_tokens'].astype(int),
+        'avg_output_tokens': token_stats['output_tokens'].astype(int),
+    })
     
     print("\n" + "="*80)
     print("Summary Statistics by Prompt")
@@ -74,40 +83,6 @@ def create_summary_table(df):
     print("="*80 + "\n")
     
     return summary
-
-
-def plot_accuracy_by_prompt(df, output_dir="figures"):
-    """Create bar plot of accuracy by prompt."""
-    os.makedirs(output_dir, exist_ok=True)
-    
-    summary = df.groupby('prompt')['score'].mean().sort_index()
-    prompt_labels = [PROMPT_NAMES.get(i, f"Prompt {i}") for i in summary.index]
-    
-    set_publication_style()
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    bars = ax.bar(range(len(summary)), summary.values, 
-                  color=plt.cm.viridis(np.linspace(0.2, 0.8, len(summary))))
-    
-    ax.set_xlabel('Prompt Type', fontsize=12, fontweight='bold')
-    ax.set_ylabel('Accuracy', fontsize=12, fontweight='bold')
-    ax.set_title('Accuracy by Prompt Type on GPQA Diamond', fontsize=14, fontweight='bold')
-    ax.set_xticks(range(len(summary)))
-    ax.set_xticklabels(prompt_labels, rotation=45, ha='right')
-    ax.set_ylim(0, 1.0)
-    ax.grid(axis='y', alpha=0.3, linestyle='--')
-    
-    # Add value labels on bars
-    for i, (bar, val) in enumerate(zip(bars, summary.values)):
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                f'{val:.3f}', ha='center', va='bottom', fontsize=10)
-    
-    plt.tight_layout()
-    output_path = os.path.join(output_dir, "accuracy_by_prompt.pdf")
-    plt.savefig(output_path, format='pdf', dpi=300, bbox_inches='tight')
-    print(f"Saved: {output_path}")
-    plt.close()
 
 
 def plot_accuracy_with_error_bars(df, output_dir="figures"):
@@ -202,101 +177,25 @@ def plot_token_usage(df, output_dir="figures"):
     plt.close()
 
 
-def plot_accuracy_distribution(df, output_dir="figures"):
-    """Create violin plot showing distribution of accuracy across questions."""
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # Calculate accuracy per question for each prompt
-    question_accuracy = df.groupby(['prompt', 'question_id'])['score'].mean().reset_index()
-    
-    try:
-        plt.style.use('seaborn-v0_8-whitegrid')
-    except OSError:
-        try:
-            plt.style.use('seaborn-whitegrid')
-        except OSError:
-            plt.style.use('default')
-    fig, ax = plt.subplots(figsize=(12, 6))
-    
-    prompts = sorted(question_accuracy['prompt'].unique())
-    data_to_plot = [question_accuracy[question_accuracy['prompt'] == p]['score'].values 
-                    for p in prompts]
-    prompt_labels = [PROMPT_NAMES.get(p, f"Prompt {p}") for p in prompts]
-    
-    parts = ax.violinplot(data_to_plot, positions=range(len(prompts)), 
-                          showmeans=True, showmedians=True)
-    
-    # Color the violins
-    for i, pc in enumerate(parts['bodies']):
-        pc.set_facecolor(plt.cm.viridis(i / len(prompts)))
-        pc.set_alpha(0.7)
-    
-    ax.set_xlabel('Prompt Type', fontsize=12, fontweight='bold')
-    ax.set_ylabel('Question-Level Accuracy', fontsize=12, fontweight='bold')
-    ax.set_title('Distribution of Question-Level Accuracy by Prompt Type', 
-                 fontsize=14, fontweight='bold')
-    ax.set_xticks(range(len(prompts)))
-    ax.set_xticklabels(prompt_labels, rotation=45, ha='right')
-    ax.set_ylim(0, 1.0)
-    ax.grid(axis='y', alpha=0.3, linestyle='--')
-    
-    plt.tight_layout()
-    output_path = os.path.join(output_dir, "accuracy_distribution.pdf")
-    plt.savefig(output_path, format='pdf', dpi=300, bbox_inches='tight')
-    print(f"Saved: {output_path}")
-    plt.close()
-
-
-def plot_repetition_consistency(df, output_dir="figures"):
-    """Create heatmap showing accuracy across repetitions for each prompt."""
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # Calculate mean accuracy per prompt and repetition
-    heatmap_data = df.groupby(['prompt', 'repetition'])['score'].mean().unstack(level=0)
-    
-    try:
-        plt.style.use('seaborn-v0_8-whitegrid')
-    except OSError:
-        try:
-            plt.style.use('seaborn-whitegrid')
-        except OSError:
-            plt.style.use('default')
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    im = ax.imshow(heatmap_data.values, cmap='RdYlGn', aspect='auto', vmin=0, vmax=1)
-    
-    # Set ticks and labels
-    ax.set_xticks(range(len(heatmap_data.columns)))
-    ax.set_xticklabels([PROMPT_NAMES.get(p, f"Prompt {p}") for p in heatmap_data.columns],
-                       rotation=45, ha='right')
-    ax.set_yticks(range(len(heatmap_data.index)))
-    ax.set_yticklabels([f"Rep {r}" for r in heatmap_data.index])
-    
-    # Add text annotations
-    for i in range(len(heatmap_data.index)):
-        for j in range(len(heatmap_data.columns)):
-            text = ax.text(j, i, f'{heatmap_data.iloc[i, j]:.3f}',
-                          ha="center", va="center", color="black", fontsize=9)
-    
-    ax.set_title('Accuracy Heatmap: Prompt × Repetition', fontsize=14, fontweight='bold')
-    cbar = plt.colorbar(im, ax=ax)
-    cbar.set_label('Accuracy', fontsize=11, fontweight='bold')
-    
-    plt.tight_layout()
-    output_path = os.path.join(output_dir, "repetition_consistency.pdf")
-    plt.savefig(output_path, format='pdf', dpi=300, bbox_inches='tight')
-    print(f"Saved: {output_path}")
-    plt.close()
-
-
 def save_summary_table_latex(summary, output_dir="figures"):
-    """Save summary table as LaTeX format."""
+    """Save summary table as LaTeX format with error bars."""
     os.makedirs(output_dir, exist_ok=True)
+    
+    # Format accuracy with error bars
+    summary['accuracy'] = summary.apply(
+        lambda row: f"{row['accuracy_mean']:.3f} $\\pm$ {row['accuracy_std']:.3f}", 
+        axis=1
+    )
+    
+    # Select and rename columns for LaTeX
+    latex_df = summary[['prompt_name', 'accuracy', 'avg_input_tokens', 'avg_output_tokens']].copy()
+    latex_df.columns = ['Prompt Type', 'Accuracy', 'Avg Input Tokens', 'Avg Output Tokens']
     
     # Format for LaTeX
-    latex_table = summary.to_latex(index=False, float_format="%.3f", 
-                                   caption="Accuracy and Token Usage by Prompt Type",
-                                   label="tab:prompt_summary")
+    latex_table = latex_df.to_latex(index=False, 
+                                     caption="Accuracy and Token Usage by Prompt Type",
+                                     label="tab:prompt_summary",
+                                     escape=False)
     
     output_path = os.path.join(output_dir, "summary_table.tex")
     with open(output_path, 'w') as f:
@@ -318,11 +217,8 @@ def main():
     
     # Generate plots
     print("\nGenerating figures...")
-    plot_accuracy_by_prompt(df)
     plot_accuracy_with_error_bars(df)
     plot_token_usage(df)
-    plot_accuracy_distribution(df)
-    plot_repetition_consistency(df)
     
     # Save LaTeX table
     save_summary_table_latex(summary)

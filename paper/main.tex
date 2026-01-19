@@ -71,6 +71,8 @@ multiple-choice science questions. The GPQA Diamond subset of 198 questions are 
 \subsection{Formatting Constraints}
 Each condition uses the same task and answer rule: the last line must be \texttt{solution: X} with $X \in \{\text{A},\text{B},\text{C},\text{D}\}$. We add the following constraints on the \emph{reasoning} preceding the solution:
 
+\section{Results}
+\input{../figures/summary_table.tex}
 
 \section{Conclusion}
 Your conclusion here
@@ -82,6 +84,21 @@ I thought of this idea after reading an article by Factory on the importance of 
 \section{Model and API Parameters}
 \label{app:params}
 We use the Messages API with: \texttt{model=claude-opus-4-5-20251101}; \texttt{thinking=\{type: enabled, budget\_tokens: 64000\}}; \texttt{output\_config.effort=high}; \texttt{max\_tokens=64000}. Betas: \texttt{interleaved-thinking-2025-05-14}, \texttt{effort-2025-11-24}. This matches the setup used for GPQA in the Opus~4.5 system card \cite{opus}.
+
+\section{Additional Figures}
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.9\textwidth]{../figures/accuracy_with_error_bars.pdf}
+\caption{Accuracy by Prompt Type with Standard Deviation Across Repetitions}
+\label{fig:accuracy_error_bars}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.9\textwidth]{../figures/token_usage.pdf}
+\caption{Token Usage Comparison by Prompt Type}
+\label{fig:token_usage}
+\end{figure}
 
 
 %Bibliography

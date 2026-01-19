@@ -1,4 +1,4 @@
-import json, sys, os, random, re
+import json, sys, os, random, re, time
 from collections import namedtuple
 from datetime import datetime
 
@@ -7,6 +7,7 @@ from anthropic import Anthropic
 from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
 from anthropic.types.messages.batch_create_params import Request
 from datasets import load_dataset
+from openai import OpenAI
 from tqdm import tqdm
 # Initialize Logfire and instrument Pydantic AI for token tracking
 logfire.configure()
@@ -19,6 +20,8 @@ Example = namedtuple('Example', ['question', 'choice1', 'choice2', 'choice3', 'c
 PROMPTS = 0b000111
 REPETITIONS = 5
 MODEL = "claude-opus-4-5-20251101"
+MODEL_OPENAI = "gpt-5.2"
+REASONING_EFFORT_OPENAI = "high"
 
 
 def load_gpqa_dataset():
@@ -172,6 +175,74 @@ def create_batch_requests(examples, prompts_mask):
         return requests
 
 
+def create_openai_requests(examples, prompts_mask, repetitions):
+    """Create request list for OpenAI Responses API (gpt-5.2, effort high)."""
+    enabled = [i for i in range(len(PROMPT_FUNCTIONS)) if (prompts_mask >> i) & 1]
+    out = []
+    for rep in range(repetitions):
+        for p in enabled:
+            for q, ex in enumerate(examples):
+                out.append({
+                    "custom_id": f"q{q}_p{p}_r{rep}",
+                    "prompt_text": PROMPT_FUNCTIONS[p](ex).strip(),
+                })
+    with logfire.span(f"Created {len(out)} OpenAI requests"):
+        return out
+
+
+def run_openai(requests, client):
+    """Run via OpenAI Responses API. Returns list of objects with .custom_id, .output, .input_tokens, .output_tokens."""
+    results = []
+    for req in tqdm(requests, desc="OpenAI Responses"):
+        for attempt in range(3):
+            try:
+                r = client.responses.create(
+                    model=MODEL_OPENAI,
+                    reasoning={"effort": REASONING_EFFORT_OPENAI},
+                    input=[{"role": "user", "content": req["prompt_text"]}],
+                    max_output_tokens=4096,
+                )
+                text = getattr(r, "output_text", None) or ""
+                u = getattr(r, "usage", None)
+                uit = getattr(u, "input_tokens", 0) or 0
+                uot = getattr(u, "output_tokens", 0) or 0
+                results.append(type("_", (), {"custom_id": req["custom_id"], "output": text, "input_tokens": uit, "output_tokens": uot})())
+                break
+            except Exception as e:
+                if attempt == 2:
+                    raise
+                if "429" in str(e) or "rate" in str(e).lower():
+                    time.sleep(2 ** (attempt + 1))
+                    continue
+                raise
+    return results
+
+
+def process_openai_results(results, examples):
+    """Process OpenAI Responses API results into same shape as process_batch_results."""
+    processed = []
+    for r in tqdm(results, desc="Processing results"):
+        m = re.match(r"q(\d+)_p(\d+)_r(\d+)", r.custom_id)
+        qid, prompt, rep = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        response_text = r.output
+        ans = re.search(r"solution:\s*([A-D])", response_text)
+        letter = ans.group(1) if ans else None
+        correct = examples[qid].correct_index
+        score = 1.0 if letter == "ABCD"[correct] else 0.0
+        processed.append({
+            "question_id": qid,
+            "prompt": prompt,
+            "repetition": rep,
+            "extracted_letter": letter,
+            "score": score,
+            "correct_answer": correct,
+            "input_tokens": getattr(r, "input_tokens", 0) or 0,
+            "output_tokens": getattr(r, "output_tokens", 0) or 0,
+            "response_text": response_text,
+        })
+    return processed
+
+
 def submit_batch(requests, client):
     """Submit batch to Anthropic API."""
     with logfire.span(f"Submitting batch with {len(requests)} requests"):
@@ -222,6 +293,7 @@ def process_batch_results(batch_id, examples, client):
 
 def save_results_jsonl(processed_results, filename):
     """Save processed results."""
+    os.makedirs("data", exist_ok=True)
     filepath = os.path.join("data", filename)
     with logfire.span(f"Saving results to {filepath}"):
         with open(filepath, 'w') as outfile:
@@ -234,17 +306,35 @@ def save_results_jsonl(processed_results, filename):
 def main():
     with logfire.span(f"Starting with model {MODEL}, prompts {PROMPTS:b}, repetitions {REPETITIONS}"):
         examples = load_gpqa_dataset()
-        client = Anthropic()
         if sys.argv[1] == "submit":
-            if sys.argv[2] == "smoke":
-                requests = create_smoke_test_request(examples[0])
-            elif sys.argv[2] == "full":
-                requests = create_batch_requests(examples, PROMPTS)
-            submit_batch(requests, client)
+            mode = sys.argv[2]
+            if mode == "openai-smoke":
+                client = OpenAI()
+                requests = create_openai_requests(examples[:1], 0b1, 1)
+                results = run_openai(requests, client)
+                processed = process_openai_results(results, examples)
+                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                save_results_jsonl(processed, f"results_openai_{timestamp}_smoke.jsonl")
+            elif mode == "openai-full":
+                client = OpenAI()
+                requests = create_openai_requests(examples, PROMPTS, REPETITIONS)
+                results = run_openai(requests, client)
+                processed = process_openai_results(results, examples)
+                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                save_results_jsonl(processed, f"results_openai_{timestamp}_{PROMPTS}.jsonl")
+            else:
+                client = Anthropic()
+                if mode == "smoke":
+                    requests = create_smoke_test_request(examples[0])
+                elif mode == "full":
+                    requests = create_batch_requests(examples, PROMPTS)
+                else:
+                    raise SystemExit(f"Unknown submit mode: {mode}")
+                submit_batch(requests, client)
         else:
+            client = Anthropic()
             batch_id = sys.argv[1]
             processed_results = process_batch_results(batch_id, examples, client)
-            # Save
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             save_results_jsonl(processed_results, f"results_{timestamp}_{PROMPTS}.jsonl")
 

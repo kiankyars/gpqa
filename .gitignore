@@ -137,3 +137,14 @@ logs/*
 *.pkl
 wandb/
 data
+
+# LaTeX
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.synctex.gz
+arxiv-submit/
+arxiv-submit.tar.gz

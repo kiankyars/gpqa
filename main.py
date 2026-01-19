@@ -196,37 +196,9 @@ def process_batch_results(batch_id, examples, client):
         repetition = int(match.group(3))
         # Extract response text
         response_text = next(block.text for block in result.result.message.content if block.type == "text")
-        
-        # Try to extract answer - handle both JSON and plain text formats
-        extracted_letter = None
-        
-        # For JSON format (prompt 1 - Strict JSON)
-        if prompt == 1:
-            try:
-                # Try to find JSON block (may be wrapped in ```json or just raw JSON)
-                json_match = re.search(r'```json\s*(\{.*?\})\s*```', response_text, re.DOTALL)
-                if json_match:
-                    json_str = json_match.group(1)
-                else:
-                    # Try to find JSON object directly
-                    json_match = re.search(r'\{[^{}]*"solution"[^{}]*\}', response_text)
-                    if json_match:
-                        json_str = json_match.group(0)
-                    else:
-                        # Try to parse entire response as JSON
-                        json_str = response_text.strip()
-                
-                parsed_json = json.loads(json_str)
-                if 'solution' in parsed_json:
-                    extracted_letter = str(parsed_json['solution']).strip().upper()
-            except (json.JSONDecodeError, AttributeError, KeyError):
-                pass
-        
-        # Fallback to plain text format (for other prompts or if JSON parsing failed)
-        if extracted_letter is None:
-            match_ans = re.search(r'solution:\s*([A-D])', response_text, re.IGNORECASE)
-            if match_ans:
-                extracted_letter = match_ans.group(1).upper()
+        match_ans = re.search(r'solution:\s*([A-D])', response_text)
+        # this is the letter of the answer the model returned
+        extracted_letter = match_ans.group(1) if match_ans else None
         # this is the index of the correct answer
         correct_answer = examples[question_id].correct_index
         # this is the letter of the correct answer

@@ -8,7 +8,6 @@
 \usepackage{hyperref}       % hyperlinks
 \usepackage{url}            % simple URL typesetting
 \usepackage{booktabs}       % professional-quality tables
-\usepackage{amsmath}        % math environments and \text command
 \usepackage{amsfonts}       % blackboard math symbols
 \usepackage{nicefrac}       % compact symbols for 1/2, etc.
 \usepackage{microtype}      % microtypography 
@@ -71,8 +70,40 @@ multiple-choice science questions. The GPQA Diamond subset of 198 questions are 
 \subsection{Formatting Constraints}
 Each condition uses the same task and answer rule: the last line must be \texttt{solution: X} with $X \in \{\text{A},\text{B},\text{C},\text{D}\}$. We add the following constraints on the \emph{reasoning} preceding the solution:
 
+\begin{enumerate}
+\item \textbf{Baseline (Prompt 0):} Identical to harness used in Opus 4.5 model card.
+
+\item \textbf{Strict JSON (Prompt 1):} The model must output valid JSON only, containing exactly five keys: \texttt{initial\_intuition}, \texttt{step\_by\_step\_logic}, \texttt{potential\_counterarguments}, \texttt{confidence\_score\_0\_to\_1}, and \texttt{solution}.
+
+\item \textbf{Structural Rigidity (Prompt 2):} Reasoning must consist of exactly three bullet points, each no longer than 20 words, and must not use the words "because" or "therefore".
+
+\item \textbf{Python Code (Prompt 3):} The model must write its reasoning in Python.
+
+\item \textbf{Oulipo Constraint (Prompt 4):} The letter 'e' cannot appear anywhere in the reasoning chain, inspired by the Oulipo literary movement.
+
+\item \textbf{Restricted Vocabulary (Prompt 5):} Reasoning cannot use 16 specific high-norm English tokens identified from GPT-oss embeddings: accordingly, code, ocode, The, settings, Moreover, description, Let's, This, core, utilizes, revolves, Here's, possibly, logic, thereby.
+\end{enumerate}
+
+\section{Experimental Setup}
+We evaluate each formatting constraint on the full GPQA Diamond dataset (198 questions) with 5 repetitions per question-constraint pair, resulting in 990 total evaluations per condition. Questions are presented with randomly shuffled answer choices to prevent position bias. All experiments use Claude Opus 4.5 with identical parameters (see Appendix~\ref{app:params}) to ensure fair comparison across conditions.
+
+Accuracy is calculated as the fraction of correct answers per condition, aggregated across all questions and repetitions.
+
 \section{Results}
+
+\subsection{Accuracy by Formatting Constraint}
+Table~\ref{tab:prompt_summary} presents accuracy results.
+
+\begin{table}[h]
+\centering
 \input{../figures/summary_table.tex}
+\end{table}
+
+\subsection{Token Usage Analysis}
+Figure~\ref{fig:token_usage} in Appendix~\ref{app:figures} shows token usage patterns across conditions.
+
+\subsection{Error Analysis}
+
 
 \section{Conclusion}
 Your conclusion here
@@ -81,24 +112,19 @@ Your conclusion here
 I thought of this idea after reading an article by Factory on the importance of context formatting for agentic performance \cite{factory}.
 
 \appendix
+\section{Figures}
+\label{app:figures}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{../figures/token_usage.pdf}
+\caption{Token usage by formatting constraint}
+\label{fig:token_usage}
+\end{figure}
+
 \section{Model and API Parameters}
 \label{app:params}
 We use the Messages API with: \texttt{model=claude-opus-4-5-20251101}; \texttt{thinking=\{type: enabled, budget\_tokens: 64000\}}; \texttt{output\_config.effort=high}; \texttt{max\_tokens=64000}. Betas: \texttt{interleaved-thinking-2025-05-14}, \texttt{effort-2025-11-24}. This matches the setup used for GPQA in the Opus~4.5 system card \cite{opus}.
-
-\section{Additional Figures}
-\begin{figure}[h]
-\centering
-\includegraphics[width=0.9\textwidth]{../figures/accuracy_with_error_bars.pdf}
-\caption{Accuracy by Prompt Type with Standard Deviation Across Repetitions}
-\label{fig:accuracy_error_bars}
-\end{figure}
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=0.9\textwidth]{../figures/token_usage.pdf}
-\caption{Token Usage Comparison by Prompt Type}
-\label{fig:token_usage}
-\end{figure}
 
 
 %Bibliography

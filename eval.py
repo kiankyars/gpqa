@@ -1,105 +1,336 @@
-from pydantic_evals import Case, Dataset
-from pydantic_evals.evaluators import Evaluator
+import json
+import os
+from pathlib import Path
+from collections import namedtuple
 
-class AccuracyEvaluator(Evaluator):
-    """Custom evaluator for accuracy calculation."""
-    def evaluate(self, ctx):
-        # Comparison logic for pydantic-evals
-        return 1.0 if ctx.output == ctx.expected_output else 0.0
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
 
-def create_pydantic_evals_dataset(processed_results, examples):
-    """Create Pydantic Evals dataset from processed results."""
-    cases = []
-    aggregated_stats = {}
+# Prompt names for labeling
+PROMPT_NAMES = {
+    0: "Baseline",
+    1: "Strict JSON",
+    2: "Structural Rigidity",
+    3: "Python",
+    4: "Oulipo",
+    5: "Banned Words"
+}
+
+Example = namedtuple('Example', ['question', 'choice1', 'choice2', 'choice3', 'choice4', 'correct_index'])
+
+
+def set_publication_style():
+    """Set matplotlib style for publication-quality figures."""
+    try:
+        plt.style.use('seaborn-v0_8-whitegrid')
+    except OSError:
+        try:
+            plt.style.use('seaborn-whitegrid')
+        except OSError:
+            plt.style.use('default')
+
+
+def load_results_jsonl(filepath):
+    """Load JSONL results into a DataFrame."""
+    records = []
+    with open(filepath, 'r') as f:
+        for line in f:
+            records.append(json.loads(line))
+    return pd.DataFrame(records)
+
+
+def load_all_results(data_dir="data"):
+    """Load all JSONL files and combine into a single DataFrame."""
+    data_path = Path(data_dir)
+    jsonl_files = list(data_path.glob("results_*.jsonl"))
     
-    results_by_case = {}
-    for result in processed_results:
-        key = (result['question_id'], result['prompt'])
-        if key not in results_by_case:
-            results_by_case[key] = []
-        results_by_case[key].append(result)
+    if not jsonl_files:
+        raise FileNotFoundError(f"No results files found in {data_dir}")
     
-    for (question_id, prompt), results_list in results_by_case.items():
-        example = examples[question_id]
-        expected_output = example.correct_index
-        
-        correct_count = sum(1 for r in results_list if r['score'] == 1.0)
-        total_count = len(results_list)
-        
-        cases.append(Case(
-            name=f"q{question_id}_p{prompt}",
-            inputs={'question': example.question, 'prompt': prompt},
-            expected_output=str(expected_output),
-            metadata={'question_id': question_id, 'prompt': prompt},
-        ))
-        
-        if prompt not in aggregated_stats:
-            aggregated_stats[prompt] = {'correct': 0, 'total': 0}
-        aggregated_stats[prompt]['correct'] += correct_count
-        aggregated_stats[prompt]['total'] += total_count
+    print(f"Loading {len(jsonl_files)} result file(s)...")
+    dfs = [load_results_jsonl(f) for f in jsonl_files]
+    df = pd.concat(dfs, ignore_index=True)
+    print(f"Loaded {len(df)} total results")
+    return df
+
+
+def create_summary_table(df):
+    """Create summary statistics table by prompt."""
+    summary = df.groupby('prompt').agg({
+        'score': ['mean', 'sum', 'count'],
+        'input_tokens': 'mean',
+        'output_tokens': 'mean',
+    }).round(2)
     
-    dataset = Dataset(cases=cases)
-    dataset.add_evaluator(AccuracyEvaluator())
-    return dataset, aggregated_stats
-
-dataset, aggregated_stats = create_pydantic_evals_dataset(processed_results, examples)
-for level in sorted(aggregated_stats.keys()):
-    stats = aggregated_stats[level]
-    accuracy = stats['correct'] / stats['total'] if stats['total'] > 0 else 0.0
-
-import logfire
-from pydantic_evals import Dataset, Case
-from typing import Any
-
-# Configure Logfire to send data
-logfire.configure(send_to_logfire='if-token-present')
-
-# 1. Convert your loaded GPQA examples into Eval Cases
-# We store the "question_id" in metadata to link back to the batch result
-cases = [
-    Case(
-        input=ex.question,
-        expected_output=ex.correct_index, # Store index (0-3) or letter
-        metadata={"id": i, "choices": [ex.choice1, ex.choice2, ex.choice3, ex.choice4]}
-    )
-    for i, ex in enumerate(examples)
-]
-
-dataset = Dataset(cases=cases)
-
-# 2. Create a "Lookup Task"
-# This simulates an Agent run but uses your pre-computed batch results
-def batch_lookup_task(input_data: Any, case: Case) -> str:
-    # Find the result for this question_id and specific prompt/repetition
-    # (You might loop this whole block over your different prompt levels)
-    q_id = case.metadata["id"]
+    summary.columns = ['accuracy', 'correct', 'total', 'avg_input_tokens', 'avg_output_tokens']
+    summary['prompt_name'] = summary.index.map(PROMPT_NAMES)
+    summary = summary[['prompt_name', 'accuracy', 'correct', 'total', 'avg_input_tokens', 'avg_output_tokens']]
     
-    # Example: Look up result for Prompt 0, Repetition 0
-    # In reality, you would run 'dataset.evaluate' multiple times, 
-    # once for each prompt/repetition combo you want to visualize.
-    result_row = next(
-        (r for r in processed_results 
-         if r['question_id'] == q_id and r['prompt'] == 0 and r['repetition'] == 0),
-        None
-    )
+    print("\n" + "="*80)
+    print("Summary Statistics by Prompt")
+    print("="*80)
+    print(summary.to_string())
+    print("="*80 + "\n")
     
-    if not result_row:
-        return "MISSING"
+    return summary
+
+
+def plot_accuracy_by_prompt(df, output_dir="figures"):
+    """Create bar plot of accuracy by prompt."""
+    os.makedirs(output_dir, exist_ok=True)
     
-    # Return the raw text or extracted letter for the evaluator to check
-    return result_row['extracted_letter'] # or result_row['response_text']
+    summary = df.groupby('prompt')['score'].mean().sort_index()
+    prompt_labels = [PROMPT_NAMES.get(i, f"Prompt {i}") for i in summary.index]
+    
+    set_publication_style()
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    bars = ax.bar(range(len(summary)), summary.values, 
+                  color=plt.cm.viridis(np.linspace(0.2, 0.8, len(summary))))
+    
+    ax.set_xlabel('Prompt Type', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Accuracy', fontsize=12, fontweight='bold')
+    ax.set_title('Accuracy by Prompt Type on GPQA Diamond', fontsize=14, fontweight='bold')
+    ax.set_xticks(range(len(summary)))
+    ax.set_xticklabels(prompt_labels, rotation=45, ha='right')
+    ax.set_ylim(0, 1.0)
+    ax.grid(axis='y', alpha=0.3, linestyle='--')
+    
+    # Add value labels on bars
+    for i, (bar, val) in enumerate(zip(bars, summary.values)):
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                f'{val:.3f}', ha='center', va='bottom', fontsize=10)
+    
+    plt.tight_layout()
+    output_path = os.path.join(output_dir, "accuracy_by_prompt.pdf")
+    plt.savefig(output_path, format='pdf', dpi=300, bbox_inches='tight')
+    print(f"Saved: {output_path}")
+    plt.close()
 
-# 3. Define a Scorer
-def exact_match_scorer(case: Case, output: str) -> bool:
-    # Map index to letter
-    correct_letter = "ABCD"[case.expected_output]
-    return output == correct_letter
 
-# 4. Run the Eval (Instant & Free)
-# This sends the data to Logfire's "Evals" tab
-logfire.info("Uploading batch results to Logfire Evals UI...")
-dataset.evaluate_sync(
-    batch_lookup_task, 
-    scorers=[exact_match_scorer],
-    experiment_name="gpqa-batch-prompt-0"
-)
+def plot_accuracy_with_error_bars(df, output_dir="figures"):
+    """Create bar plot with error bars showing variance across repetitions."""
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Calculate mean and std across repetitions for each prompt
+    grouped = df.groupby(['prompt', 'repetition'])['score'].mean().reset_index()
+    summary_stats = grouped.groupby('prompt')['score'].agg(['mean', 'std', 'count']).sort_index()
+    
+    prompt_labels = [PROMPT_NAMES.get(i, f"Prompt {i}") for i in summary_stats.index]
+    
+    try:
+        plt.style.use('seaborn-v0_8-whitegrid')
+    except OSError:
+        try:
+            plt.style.use('seaborn-whitegrid')
+        except OSError:
+            plt.style.use('default')
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    x_pos = np.arange(len(summary_stats))
+    bars = ax.bar(x_pos, summary_stats['mean'], 
+                  yerr=summary_stats['std'],
+                  capsize=5,
+                  color=plt.cm.viridis(np.linspace(0.2, 0.8, len(summary_stats))),
+                  alpha=0.8,
+                  edgecolor='black', linewidth=1.2)
+    
+    ax.set_xlabel('Prompt Type', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Accuracy (Mean ± Std)', fontsize=12, fontweight='bold')
+    ax.set_title('Accuracy by Prompt Type with Standard Deviation Across Repetitions', 
+                 fontsize=14, fontweight='bold')
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(prompt_labels, rotation=45, ha='right')
+    ax.set_ylim(0, 1.0)
+    ax.grid(axis='y', alpha=0.3, linestyle='--')
+    
+    # Add value labels
+    for i, (bar, mean_val, std_val) in enumerate(zip(bars, summary_stats['mean'], summary_stats['std'])):
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height + std_val + 0.02,
+                f'{mean_val:.3f}±{std_val:.3f}', ha='center', va='bottom', fontsize=9)
+    
+    plt.tight_layout()
+    output_path = os.path.join(output_dir, "accuracy_with_error_bars.pdf")
+    plt.savefig(output_path, format='pdf', dpi=300, bbox_inches='tight')
+    print(f"Saved: {output_path}")
+    plt.close()
+
+
+def plot_token_usage(df, output_dir="figures"):
+    """Create comparison of token usage by prompt."""
+    os.makedirs(output_dir, exist_ok=True)
+    
+    token_summary = df.groupby('prompt').agg({
+        'input_tokens': 'mean',
+        'output_tokens': 'mean'
+    }).sort_index()
+    
+    prompt_labels = [PROMPT_NAMES.get(i, f"Prompt {i}") for i in token_summary.index]
+    
+    try:
+        plt.style.use('seaborn-v0_8-whitegrid')
+    except OSError:
+        try:
+            plt.style.use('seaborn-whitegrid')
+        except OSError:
+            plt.style.use('default')
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    x_pos = np.arange(len(token_summary))
+    width = 0.35
+    
+    bars1 = ax.bar(x_pos - width/2, token_summary['input_tokens'], width,
+                   label='Input Tokens', color='#2E86AB', alpha=0.8)
+    bars2 = ax.bar(x_pos + width/2, token_summary['output_tokens'], width,
+                   label='Output Tokens', color='#A23B72', alpha=0.8)
+    
+    ax.set_xlabel('Prompt Type', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Average Tokens', fontsize=12, fontweight='bold')
+    ax.set_title('Token Usage by Prompt Type', fontsize=14, fontweight='bold')
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(prompt_labels, rotation=45, ha='right')
+    ax.legend(fontsize=11)
+    ax.grid(axis='y', alpha=0.3, linestyle='--')
+    
+    plt.tight_layout()
+    output_path = os.path.join(output_dir, "token_usage.pdf")
+    plt.savefig(output_path, format='pdf', dpi=300, bbox_inches='tight')
+    print(f"Saved: {output_path}")
+    plt.close()
+
+
+def plot_accuracy_distribution(df, output_dir="figures"):
+    """Create violin plot showing distribution of accuracy across questions."""
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Calculate accuracy per question for each prompt
+    question_accuracy = df.groupby(['prompt', 'question_id'])['score'].mean().reset_index()
+    
+    try:
+        plt.style.use('seaborn-v0_8-whitegrid')
+    except OSError:
+        try:
+            plt.style.use('seaborn-whitegrid')
+        except OSError:
+            plt.style.use('default')
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    prompts = sorted(question_accuracy['prompt'].unique())
+    data_to_plot = [question_accuracy[question_accuracy['prompt'] == p]['score'].values 
+                    for p in prompts]
+    prompt_labels = [PROMPT_NAMES.get(p, f"Prompt {p}") for p in prompts]
+    
+    parts = ax.violinplot(data_to_plot, positions=range(len(prompts)), 
+                          showmeans=True, showmedians=True)
+    
+    # Color the violins
+    for i, pc in enumerate(parts['bodies']):
+        pc.set_facecolor(plt.cm.viridis(i / len(prompts)))
+        pc.set_alpha(0.7)
+    
+    ax.set_xlabel('Prompt Type', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Question-Level Accuracy', fontsize=12, fontweight='bold')
+    ax.set_title('Distribution of Question-Level Accuracy by Prompt Type', 
+                 fontsize=14, fontweight='bold')
+    ax.set_xticks(range(len(prompts)))
+    ax.set_xticklabels(prompt_labels, rotation=45, ha='right')
+    ax.set_ylim(0, 1.0)
+    ax.grid(axis='y', alpha=0.3, linestyle='--')
+    
+    plt.tight_layout()
+    output_path = os.path.join(output_dir, "accuracy_distribution.pdf")
+    plt.savefig(output_path, format='pdf', dpi=300, bbox_inches='tight')
+    print(f"Saved: {output_path}")
+    plt.close()
+
+
+def plot_repetition_consistency(df, output_dir="figures"):
+    """Create heatmap showing accuracy across repetitions for each prompt."""
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Calculate mean accuracy per prompt and repetition
+    heatmap_data = df.groupby(['prompt', 'repetition'])['score'].mean().unstack(level=0)
+    
+    try:
+        plt.style.use('seaborn-v0_8-whitegrid')
+    except OSError:
+        try:
+            plt.style.use('seaborn-whitegrid')
+        except OSError:
+            plt.style.use('default')
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    im = ax.imshow(heatmap_data.values, cmap='RdYlGn', aspect='auto', vmin=0, vmax=1)
+    
+    # Set ticks and labels
+    ax.set_xticks(range(len(heatmap_data.columns)))
+    ax.set_xticklabels([PROMPT_NAMES.get(p, f"Prompt {p}") for p in heatmap_data.columns],
+                       rotation=45, ha='right')
+    ax.set_yticks(range(len(heatmap_data.index)))
+    ax.set_yticklabels([f"Rep {r}" for r in heatmap_data.index])
+    
+    # Add text annotations
+    for i in range(len(heatmap_data.index)):
+        for j in range(len(heatmap_data.columns)):
+            text = ax.text(j, i, f'{heatmap_data.iloc[i, j]:.3f}',
+                          ha="center", va="center", color="black", fontsize=9)
+    
+    ax.set_title('Accuracy Heatmap: Prompt × Repetition', fontsize=14, fontweight='bold')
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label('Accuracy', fontsize=11, fontweight='bold')
+    
+    plt.tight_layout()
+    output_path = os.path.join(output_dir, "repetition_consistency.pdf")
+    plt.savefig(output_path, format='pdf', dpi=300, bbox_inches='tight')
+    print(f"Saved: {output_path}")
+    plt.close()
+
+
+def save_summary_table_latex(summary, output_dir="figures"):
+    """Save summary table as LaTeX format."""
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Format for LaTeX
+    latex_table = summary.to_latex(index=False, float_format="%.3f", 
+                                   caption="Accuracy and Token Usage by Prompt Type",
+                                   label="tab:prompt_summary")
+    
+    output_path = os.path.join(output_dir, "summary_table.tex")
+    with open(output_path, 'w') as f:
+        f.write(latex_table)
+    print(f"Saved: {output_path}")
+
+
+def main():
+    """Main analysis pipeline."""
+    print("="*80)
+    print("GPQA Evaluation Analysis")
+    print("="*80)
+    
+    # Load data
+    df = load_all_results()
+    
+    # Create summary table
+    summary = create_summary_table(df)
+    
+    # Generate plots
+    print("\nGenerating figures...")
+    plot_accuracy_by_prompt(df)
+    plot_accuracy_with_error_bars(df)
+    plot_token_usage(df)
+    plot_accuracy_distribution(df)
+    plot_repetition_consistency(df)
+    
+    # Save LaTeX table
+    save_summary_table_latex(summary)
+    
+    print("\n" + "="*80)
+    print("Analysis complete! All outputs saved to 'figures/' directory")
+    print("="*80)
+
+
+if __name__ == "__main__":
+    main()

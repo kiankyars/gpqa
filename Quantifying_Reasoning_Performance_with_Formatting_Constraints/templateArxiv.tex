@@ -1,0 +1,77 @@
+\documentclass{article}
+
+
+\usepackage{PRIMEarxiv}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography 
+\usepackage{fancyhdr}       % header
+\usepackage{graphicx}       % graphics
+\graphicspath{{media/}}     % organize your images and other figures under media/ folder
+
+%Header
+\pagestyle{fancy}
+\thispagestyle{empty}
+\rhead{ \textit{ }} 
+
+% Update your Headers here
+\fancyhead[LO]{Kian Kyars}
+% \fancyhead[RE]{Firstauthor and Secondauthor} % Firstauthor et al. if more than 2 - must use \documentclass[twoside]{article}
+
+
+
+  
+%% Title
+\title{Quantifying Reasoning Performance with Formatting Constraints}
+
+\author{
+  Kian Kyars \\
+  Independent \\
+  Edmonton \\
+  December 2025 \\
+  \texttt{kiankyars@gmail.com} \\
+}
+
+
+\begin{document}
+\maketitle
+
+
+\begin{abstract}
+In this paper, I seek to answer the question of whether forcing a model to adhere to complex non-functional formatting rules degrades its ability to reason, by proxy of performance on a PhD-level reasoning benchmark. My objective is to provide actionable insights on the extent to which there exists a formatting tax on reasoning capabilities in AI agents, which will be useful for the engineering community. I use one of the current SoTA reasoning models, Claude Opus 4.5, on the Diamond GPQA benchmark, which is shown on the system card of all Frontier Lab models, to test how different reasoning constraints affect benchmark performance.
+\end{abstract}
+
+
+% keywords can be removed
+\keywords{Reasoning \and Formatting \and GPQA \and CoT}
+
+
+\section{Introduction}
+Although it has been one year since the mainstream arrival of reasoning models, many aspects of their behavior are only understood weakly, and robust experimentation can strengthen our collective understanding. A better understanding on how prompting affects reasoning can help those using thinking models in their day-to-day workflow to better take advantage of them.
+
+\section{Reasoning Models}
+In this study, I test with Claude Opus 4.5 (claude-opus-4-5-20251101), using the same parameters as the official Opus 4.5 GPQA model card results, which are located in the appendix.
+
+
+\section{GPQA Diamond}
+The Graduate-Level Google-Proof Q\&A benchmark (GPQA) is a set of very challenging
+multiple-choice science questions. The GPQA Diamond subset of 198 questions are described by the developers of the test as the “highest quality subset which includes only questions where both experts answer correctly and the majority of non-experts answer incorrectly” \cite{rein2023gpqagraduatelevelgoogleproofqa}. Furthermore, if an "expert validator answers incorrectly … they [must] describe clearly the mistake or their understanding of the question writer’s explanation".
+
+\section{Conclusion}
+Your conclusion here
+
+\section*{Acknowledgments}
+I thought of this idea after reading an article by Factory on the importance of context formatting for agentic performance \cite{factory}.
+
+%Bibliography
+\bibliographystyle{plain}
+\bibliography{references}  
+
+
+\end{document}

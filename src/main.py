@@ -128,13 +128,14 @@ PROMPT_FUNCTIONS = [
     create_prompt_5,
 ]
 
-def create_smoke_test_request(example):
-    """Create a single request for testing purposes."""
+def create_smoke_test_request(example, prompts_mask):
+    """For testing purposes."""
     examples = []
-    for i in range(1):
-        prompt_text = PROMPT_FUNCTIONS[i](example)
+    enabled_prompts = [i for i in range(len(PROMPT_FUNCTIONS)) if (prompts_mask >> i) & 1]
+    for prompt in enabled_prompts:
+        prompt_text = PROMPT_FUNCTIONS[prompt](example)
         examples.append(Request({
-            "custom_id": f"smoke_test_q0_p{i}_r0",
+            "custom_id": f"smoke_test_q0_p{prompt}_r0",
             "params": MessageCreateParamsNonStreaming({
                 "model": MODEL,
                 "max_tokens": 1024,
@@ -256,7 +257,7 @@ def main():
         client = Anthropic()
         if sys.argv[1] == "submit":
             if sys.argv[2] == "smoke":
-                requests = create_smoke_test_request(examples[0])
+                requests = create_smoke_test_request(examples[0], PROMPTS)
             elif sys.argv[2] == "full":
                 requests = create_batch_requests(examples, PROMPTS)
             submit_batch(requests, client)

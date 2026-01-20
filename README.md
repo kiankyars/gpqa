@@ -1,9 +1,9 @@
 dependecies:
 - uv sync
 usage:
-- uv run main.py submit smoke OR
-- uv run main.py submit full OR
-- uv run main.py <batch_id>
+- uv run src/main.py submit smoke OR
+- uv run src/main.py submit full OR
+- uv run src/main.py <batch_id>
 
 paper:
 - make / make build   # from repo root

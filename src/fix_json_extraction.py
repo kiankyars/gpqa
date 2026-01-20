@@ -9,10 +9,10 @@ def extract_answer_from_response(response_text: str, prompt: int) -> str | None:
     if prompt == 1:
         try:
             m = re.search(r'```json\s*(\{.*?\})\s*```', response_text, re.DOTALL)
-            s = m.group(1) if m else response_text.strip()
-            if not m:
+            s = m.group(1) if m else None
+            if s is None:
                 m2 = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*"solution"[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response_text, re.DOTALL)
-                s = m2.group(0) if m2 else s
+                s = m2.group(0) if m2 else response_text.strip()
             obj = json.loads(s)
             if 'solution' in obj:
                 out = str(obj['solution']).strip().upper()

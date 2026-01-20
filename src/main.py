@@ -8,6 +8,8 @@ from anthropic.types.message_create_params import MessageCreateParamsNonStreamin
 from anthropic.types.messages.batch_create_params import Request
 from datasets import load_dataset
 from tqdm import tqdm
+
+from fix_json_extraction import extract_answer_from_response
 # Initialize Logfire and instrument Pydantic AI for token tracking
 logfire.configure()
 logfire.instrument_pydantic_ai()
@@ -194,11 +196,8 @@ def process_batch_results(batch_id, examples, client):
         question_id = int(match.group(1))
         prompt = int(match.group(2))
         repetition = int(match.group(3))
-        # Extract response text
         response_text = next(block.text for block in result.result.message.content if block.type == "text")
-        match_ans = re.search(r'solution:\s*([A-D])', response_text)
-        # this is the letter of the answer the model returned
-        extracted_letter = match_ans.group(1) if match_ans else None
+        extracted_letter = extract_answer_from_response(response_text, prompt)
         # this is the index of the correct answer
         correct_answer = examples[question_id].correct_index
         # this is the letter of the correct answer

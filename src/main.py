@@ -16,7 +16,7 @@ logfire.instrument_pydantic_ai()
 Example = namedtuple('Example', ['question', 'choice1', 'choice2', 'choice3', 'choice4', 'correct_index'])
 
 # base 2 config file over the six constraints
-PROMPTS = 0b000111
+PROMPTS = 0b111000
 REPETITIONS = 5
 MODEL = "claude-opus-4-5-20251101"
 

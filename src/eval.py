@@ -177,6 +177,44 @@ def plot_token_usage(df, output_dir="figures"):
     plt.close()
 
 
+def load_results_with_subdomain(filepath=None, data_dir="data"):
+    """Load gpqa_with_subdomain.jsonl (has subdomain per row). Returns None if missing."""
+    path = Path(filepath) if filepath else Path(data_dir) / "gpqa_with_subdomain.jsonl"
+    if not path.exists():
+        return None
+    df = load_results_jsonl(path)
+    if "subdomain" not in df.columns or df["subdomain"].isna().all():
+        return None
+    return df
+
+
+def analyze_errors_by_subdomain_and_prompt(df, output_dir="figures"):
+    """Accuracy and error counts by subdomain x prompt. Requires df with 'subdomain'."""
+    os.makedirs(output_dir, exist_ok=True)
+    g = df.groupby(["subdomain", "prompt"])["score"].agg(["mean", "sum", "count"])
+    g = g.rename(columns={"mean": "accuracy", "sum": "correct", "count": "n"})
+    g["errors"] = g["n"] - g["correct"]
+    # Pivot: rows=subdomain, cols=prompt, values=accuracy
+    acc = df.pivot_table(index="subdomain", columns="prompt", values="score", aggfunc="mean")
+    acc.columns = [PROMPT_NAMES.get(c, f"P{c}") for c in acc.columns]
+    print("\n" + "=" * 80)
+    print("Accuracy by Subdomain x Prompt")
+    print("=" * 80)
+    print(acc.round(3).to_string())
+    print("=" * 80 + "\n")
+    out_csv = os.path.join(output_dir, "accuracy_subdomain_prompt.csv")
+    acc.round(4).to_csv(out_csv)
+    print(f"Saved: {out_csv}")
+    # Error counts for (subdomain, prompt) with most errors
+    err = g.reset_index().nlargest(20, "errors")[["subdomain", "prompt", "errors", "n", "accuracy"]]
+    err["prompt_name"] = err["prompt"].map(PROMPT_NAMES)
+    print("\nTop 20 (subdomain, prompt) by error count:")
+    print(err.to_string(index=False))
+    out_err = os.path.join(output_dir, "errors_subdomain_prompt.csv")
+    err.to_csv(out_err, index=False)
+    print(f"Saved: {out_err}\n")
+
+
 def save_summary_table_latex(summary, output_dir="figures"):
     """Save summary table as LaTeX format with error bars."""
     os.makedirs(output_dir, exist_ok=True)
@@ -222,6 +260,11 @@ def main():
     
     # Save LaTeX table
     save_summary_table_latex(summary)
+
+    # Subdomain x prompt analysis when gpqa_with_subdomain.jsonl exists
+    df_sub = load_results_with_subdomain()
+    if df_sub is not None:
+        analyze_errors_by_subdomain_and_prompt(df_sub)
     
     print("\n" + "="*80)
     print("Analysis complete! All outputs saved to 'figures/' directory")

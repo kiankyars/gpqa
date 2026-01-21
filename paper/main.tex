@@ -100,10 +100,10 @@ Table~\ref{tab:prompt_summary} presents accuracy results. Anthropic reports 87.0
 \end{table}
 
 \subsection{Token Usage Analysis}
-Figure~\ref{fig:token_usage} in Appendix~\ref{app:figures} shows token usage patterns across conditions. Structural Rigidity yields the feweest output tokens, consistent with the 20-word-per-bullet and three-bullet restriction. I did not hypothesize which restriction would lead to the most output tokens before the experiment, but the fact that it is Oulipo is not surprising, because it's the most restrictive of the six.
+Figure~\ref{fig:token_usage} in Appendix~\ref{app:figures} shows token usage patterns across conditions. Structural Rigidity yields the fewest output tokens, consistent with the 20-word-per-bullet and three-bullet restriction. I did not hypothesize which restriction would lead to the most output tokens before the experiment, but the fact that it is Oulipo is not surprising, because it's the most restrictive of the six.
 
 \subsection{Error Analysis}
-I measure format compliance with prompt-specific checks (e.g., parseable JSON for Strict JSON; absence of `e' for Oulipo; see \texttt{test.py}). Table~\ref{tab:compliance} reports the fraction of responses that followed each constraint. Full outputs and violation records are in Appendix~\ref{app:data}.
+I measure format compliance with prompt-specific checks (e.g., parseable JSON for Strict JSON; absence of `e' for Oulipo. Table~\ref{tab:compliance} reports the fraction of responses that followed each constraint. Full outputs and violation records are in Appendix~\ref{app:data}. The violations of the use of the letter E are flagrant as only 7.5\% of samples follow the restriction. However, I have not come across any work which shows that reasoning models do follow such a restrictive constraint faithfully, so this is not surprising, but it does invalidate the resulting accuracy. Regarding the banned words, just over half of the samples were faithful to the constraint, which once again makes this analysis weaker, but for the other three constraints, the model followed instructions.
 
 \begin{table}[h]
 \centering
@@ -114,7 +114,10 @@ I measure format compliance with prompt-specific checks (e.g., parseable JSON fo
 This study uses a single model (Claude Opus 4.5) and one benchmark (GPQA Diamond). Generalization to other reasoning models and benchmarks is unknown.
 
 \section{Conclusion}
-What I conclude from this study is that unconstrained formatting gives higher accuracy, as expected. There does not seem to be a specific format constraint which lobotomizes the model more than others, among those I tested.
+What I conclude from this study is that unconstrained formatting gives higher accuracy, as expected. There does not seem to be a specific format constraint which lobotomizes the model more than others, among those I tested. The more non-obvious conclusion from this study is that certain constraints, such as banned words, and not using the letter e, are not respected by Opus 4.5.
+
+\section{Future Work}
+It only arrived to me after completing the analysis that it is a good idea to test restricting a less common letter such as Q to see whether or not the model respects that constraint, as it is much more feasible to reason without using the letter Q, as it is without the letter E.
 
 \section*{Acknowledgments}
 I thought of this idea after reading an article by Factory on the importance of context engineering for agentic performance and an article by Lennart Finke, this paper marries ideas from both \cite{factory,finke}.

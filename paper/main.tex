@@ -61,14 +61,14 @@ Factory showed that context compression hurts agentic behavior; I focus on \emph
 \section{Methodology}
 
 \subsection{Reasoning Models}
-In this study, I test with Claude Opus 4.5 (claude-opus-4-5-20251101), using the same parameters as the official Opus 4.5 GPQA model card results, which are located in Appendix~\ref{app:params}.
+In this study, I test with Claude Opus 4.5, using the same parameters as the official Opus 4.5 GPQA model card results, which are located in Appendix~\ref{app:params}.
 
 \subsection{Benchmark}
 The Graduate-Level Google-Proof Q\&A benchmark (GPQA) is a set of very challenging
-multiple-choice science questions. The GPQA Diamond subset of 198 questions are described by the developers of the test as the “highest quality subset which includes only questions where both experts answer correctly and the majority of non-experts answer incorrectly” \cite{rein2023gpqagraduatelevelgoogleproofqa}. Furthermore, if an "expert validator answers incorrectly … they [must] describe clearly the mistake or their understanding of the question writer’s explanation".
+multiple-choice science questions. The GPQA Diamond subset of 198 questions are described by the developers of the test as the “highest quality subset which includes only questions where both experts answer correctly and the majority of non-experts answer incorrectly” \cite{rein2023gpqagraduatelevelgoogleproofqa}. Furthermore, if an "expert validator answers incorrectly … they [must] describe clearly the mistake or their understanding of the question writer’s explanation" \cite{rein2023gpqagraduatelevelgoogleproofqa}.
 
 \subsection{Formatting Constraints}
-Each condition uses the same task and answer rule: the last line must be \texttt{solution: X} with $X \in \{\text{A},\text{B},\text{C},\text{D}\}$. I add the following constraints on the \emph{reasoning}:
+Each condition uses the same task and answer rule: the outpput must contain \texttt{solution:X} with $X \in \{\text{A},\text{B},\text{C},\text{D}\}$. I add the following constraints on the \emph{reasoning}:
 
 \begin{enumerate}
 \item \textbf{Baseline (Prompt 0):} Identical to harness used in Opus 4.5 model card.
@@ -79,13 +79,13 @@ Each condition uses the same task and answer rule: the last line must be \texttt
 
 \item \textbf{Python Code (Prompt 3):} The model must write its reasoning in Python.
 
-\item \textbf{Oulipo Constraint (Prompt 4):} The letter 'e' cannot appear anywhere in the reasoning chain, inspired by the Oulipo literary movement.
+\item \textbf{Oulipo Constraint (Prompt 4):} The letter 'e' cannot appear anywhere in the reasoning chain, based on Oulipo.
 
-\item \textbf{Restricted Vocabulary (Prompt 5):} Reasoning cannot use 16 specific high-norm English tokens identified from GPT-oss embeddings: accordingly, code, ocode, The, settings, Moreover, description, Let's, This, core, utilizes, revolves, Here's, possibly, logic, and thereby \cite{finke}.
+\item \textbf{Restricted Vocabulary (Prompt 5):} Reasoning cannot use 16 specific high-norm English tokens identified from GPT-OSS 120B embeddings: accordingly, code, ocode, The, settings, Moreover, description, Let's, This, core, utilizes, revolves, Here's, possibly, logic, and thereby \cite{finke}.
 \end{enumerate}
 
 \section{Experimental Setup}
-I evaluate each formatting constraint on the full GPQA Diamond dataset (198 questions) with 5 repetitions per question-constraint pair, resulting in 990 total evaluations per condition. Questions are presented with randomly shuffled answer choices to prevent position bias. All experiments use Claude Opus 4.5 with identical parameters (see Appendix~\ref{app:params}) to ensure fair comparison across conditions.
+I evaluate each formatting constraint on the full GPQA Diamond dataset (198 questions) with 5 repetitions per question-constraint pair, resulting in 990 total evaluations per condition. Questions are presented with randomly shuffled answer choices to prevent position bias. All experiments use Claude Opus 4.5 with identical parameters (see Appendix~\ref{app:params}).
 
 Accuracy is calculated as the fraction of correct answers per condition, aggregated across all questions and repetitions.
 
@@ -100,19 +100,24 @@ Table~\ref{tab:prompt_summary} presents accuracy results.
 \end{table}
 
 \subsection{Token Usage Analysis}
-Figure~\ref{fig:token_usage} in Appendix~\ref{app:figures} shows token usage patterns across conditions. Structural Rigidity yields the feweest output tokens, consistent with the 20-word-per-bullet and three-bullet limit.
+Figure~\ref{fig:token_usage} in Appendix~\ref{app:figures} shows token usage patterns across conditions. Structural Rigidity yields the feweest output tokens, consistent with the 20-word-per-bullet and three-bullet restriction.
 
 \subsection{Error Analysis}
+I measure format compliance with prompt-specific checks (e.g., parseable JSON for Strict JSON; absence of `e' for Oulipo; see \texttt{test.py}). Table~\ref{tab:compliance} reports the fraction of responses that followed each constraint. The Hugging Face dataset \url{https://huggingface.co/datasets/kyars/gpqa-results} contains the full 5,940 outputs (198 questions $\times$ 5 repetitions $\times$ 6 conditions) as well as the specific entries that violated each constraint (\texttt{violations\_by\_constraint}).
 
+\begin{table}[h]
+\centering
+\input{../output/compliance_table.tex}
+\end{table}
 
 \section{Limitations}
-The study uses a single model (Claude Opus 4.5) and one benchmark (GPQA Diamond). Generalization to other reasoning models and benchmarks is unknown.
+This study uses a single model (Claude Opus 4.5) and one benchmark (GPQA Diamond). Generalization to other reasoning models and benchmarks is unknown.
 
 \section{Conclusion}
-What I conclude from this study is that unconstrained formatting gives higher accuracy on the reasoning benchmark tested. There does not seem to be a specific format constraint which lobotomizes the model more than others.
+What I conclude from this study is that unconstrained formatting gives higher accuracy, as expected. There does not seem to be a specific format constraint which lobotomizes the model more than others, among those I tested.
 
 \section*{Acknowledgments}
-I thought of this idea after reading an article by Factory on the importance of context formatting for agentic performance \cite{factory}.
+I thought of this idea after reading an article by Factory on the importance of context engineering for agentic performance and an article by Lennart Finke, this paper marries ideas from both \cite{factory,finke}.
 
 \appendix
 \section{Figures}

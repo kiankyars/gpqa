@@ -28,7 +28,7 @@
 
   
 %% Title
-\title{Quantifying Reasoning Performance with Formatting Constraints}
+\title{Formatting Tax: How Constraints Affect Reasoning}
 
 \author{
   Kian Kyars \\
@@ -44,7 +44,7 @@
 
 
 \begin{abstract}
-In this paper, I seek to answer the question of whether forcing a model to adhere to complex non-functional formatting rules degrades its ability to reason, by proxy of performance on a PhD-level reasoning benchmark. My objective is to provide actionable insights on the extent to which there exists a formatting tax on reasoning capabilities in AI agents, which will be useful for the engineering community. I use one of the current SoTA reasoning models, Claude Opus 4.5, on the Diamond GPQA benchmark, which is shown on the system card of all Frontier Lab models, to test how different reasoning constraints affect benchmark performance.
+In this paper, I seek to answer the question of whether forcing a model to adhere to complex non-functional formatting rules degrades its ability to reason, by proxy of performance on a PhD-level reasoning benchmark. My objective is to provide actionable insights on the extent to which there exists a formatting tax on reasoning capabilities in AI agents, which will be useful for the engineering community. I use one of the current SoTA reasoning models, Claude Opus 4.5, on the Diamond GPQA benchmark, which is shown on the system card of all Frontier Lab models, to test how different reasoning constraints affect benchmark performance. My findings show that among the reasoning constraints I subject the model to, all degrade accuracy on the benchmark similarly, and that unconstrained Reasoning yields the best output
 \end{abstract}
 
 
@@ -56,7 +56,7 @@ In this paper, I seek to answer the question of whether forcing a model to adher
 Although it has been one year since the mainstream arrival of reasoning models, many aspects of their behavior are only understood weakly, and robust experimentation can strengthen our collective understanding. A better understanding on how prompting affects reasoning can help those using thinking models in their day-to-day workflow to better take advantage of them.
 
 \section{Related Work}
-Factory \cite{factory} showed that context compression hurts agentic behavior; we focus on \emph{output} formatting. GPQA Diamond is used in frontier model cards \cite{opus} as a high bar for expert-level reasoning.
+Factory \cite{factory} showed that context compression hurts agentic behavior; I focus on \emph{output} formatting. GPQA Diamond is used in frontier model cards \cite{opus} as a high bar for expert-level reasoning.
 
 \section{Methodology}
 
@@ -68,7 +68,7 @@ The Graduate-Level Google-Proof Q\&A benchmark (GPQA) is a set of very challengi
 multiple-choice science questions. The GPQA Diamond subset of 198 questions are described by the developers of the test as the “highest quality subset which includes only questions where both experts answer correctly and the majority of non-experts answer incorrectly” \cite{rein2023gpqagraduatelevelgoogleproofqa}. Furthermore, if an "expert validator answers incorrectly … they [must] describe clearly the mistake or their understanding of the question writer’s explanation".
 
 \subsection{Formatting Constraints}
-Each condition uses the same task and answer rule: the last line must be \texttt{solution: X} with $X \in \{\text{A},\text{B},\text{C},\text{D}\}$. I add the following constraints on the \emph{reasoning} preceding the solution:
+Each condition uses the same task and answer rule: the last line must be \texttt{solution: X} with $X \in \{\text{A},\text{B},\text{C},\text{D}\}$. I add the following constraints on the \emph{reasoning}:
 
 \begin{enumerate}
 \item \textbf{Baseline (Prompt 0):} Identical to harness used in Opus 4.5 model card.
@@ -81,7 +81,7 @@ Each condition uses the same task and answer rule: the last line must be \texttt
 
 \item \textbf{Oulipo Constraint (Prompt 4):} The letter 'e' cannot appear anywhere in the reasoning chain, inspired by the Oulipo literary movement.
 
-\item \textbf{Restricted Vocabulary (Prompt 5):} Reasoning cannot use 16 specific high-norm English tokens identified from GPT-oss embeddings: accordingly, code, ocode, The, settings, Moreover, description, Let's, This, core, utilizes, revolves, Here's, possibly, logic, thereby.
+\item \textbf{Restricted Vocabulary (Prompt 5):} Reasoning cannot use 16 specific high-norm English tokens identified from GPT-oss embeddings: accordingly, code, ocode, The, settings, Moreover, description, Let's, This, core, utilizes, revolves, Here's, possibly, logic, and thereby \cite{finke}.
 \end{enumerate}
 
 \section{Experimental Setup}
@@ -100,13 +100,16 @@ Table~\ref{tab:prompt_summary} presents accuracy results.
 \end{table}
 
 \subsection{Token Usage Analysis}
-Figure~\ref{fig:token_usage} in Appendix~\ref{app:figures} shows token usage patterns across conditions.
+Figure~\ref{fig:token_usage} in Appendix~\ref{app:figures} shows token usage patterns across conditions. Structural Rigidity yields the feweest output tokens, consistent with the 20-word-per-bullet and three-bullet limit.
 
 \subsection{Error Analysis}
 
 
+\section{Limitations}
+The study uses a single model (Claude Opus~4.5) and one benchmark (GPQA Diamond). Generalization to other reasoning models and benchmarks is unknown.
+
 \section{Conclusion}
-Your conclusion here
+What I conclude from this study is that unconstrained formatting gives higher accuracy on the reasoning benchmark tested. There does not seem to be a specific format constraint which lobotomizes the model more than others.
 
 \section*{Acknowledgments}
 I thought of this idea after reading an article by Factory on the importance of context formatting for agentic performance \cite{factory}.
@@ -131,6 +134,22 @@ I use the Messages API with: \texttt{model=claude-opus-4-5-20251101}; \texttt{th
 \section{Prompts and Reproducibility}
 \label{app:prompts}
 Code and prompts are available at \url{https://github.com/kiankyars/gpqa}. The six prompt variants (Baseline, Strict JSON, Structural Rigidity, Python Code, Oulipo, Restricted Vocabulary) are defined in \texttt{main.py}.
+
+\begin{figure}[h]
+  \centering
+  \IfFileExists{../figures/accuracy_with_error_bars.pdf}{%
+    \includegraphics[width=0.8\textwidth]{../figures/accuracy_with_error_bars.pdf}%
+  }{\fbox{\parbox{0.6\textwidth}{\centering\small [accuracy\_with\_error\_bars.pdf]}}}
+  \caption{Accuracy with 95\% intervals by formatting constraint}
+  \label{fig:accuracy_bars}
+  \end{figure}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.8\textwidth]{../figures/accuracy_with_error_bars.pdf}
+  \caption{Accuracy with 95\% intervals by formatting constraint}
+  \label{fig:accuracy_bars}
+\end{figure}
 
 %Bibliography
 \bibliographystyle{plain}

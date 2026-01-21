@@ -201,7 +201,7 @@ def analyze_errors_by_subdomain_and_prompt(df, output_dir="output"):
         escape=False,
         position="H",
     )
-    latex_str = latex_str.replace("\\begin{table}[H]\n", "\\begin{table}[H]\n\\centering\n")
+    latex_str = latex_str.replace("\\begin{table}[H]\n", "\\begin{table}[H]\n\\centering\n\\small\n")
     out_tex = os.path.join(output_dir, "accuracy_subdomain_prompt.tex")
     with open(out_tex, "w") as f:
         f.write(latex_str)
@@ -229,7 +229,10 @@ def save_summary_table_latex(summary, output_dir="output"):
     latex_df.columns = ['Prompt Type', 'Accuracy', 'Avg Input Tokens', 'Avg Output Tokens']
     
     # Only tabular; main.tex wraps with \begin{table}[h]\centering\caption\label\input{...}\end{table}
-    tabular_str = latex_df.to_latex(index=False, escape=False)
+    full = latex_df.to_latex(index=False, escape=False)
+    start = full.find(r"\begin{tabular}")
+    end = full.find(r"\end{tabular}") + len(r"\end{tabular}")
+    tabular_str = full[start:end] if start >= 0 and end > start else full
     output_path = os.path.join(output_dir, "summary_table.tex")
     with open(output_path, 'w') as f:
         f.write(tabular_str)

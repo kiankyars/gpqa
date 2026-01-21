@@ -226,12 +226,11 @@ def save_summary_table_latex(summary, output_dir="output"):
     latex_df = summary[['prompt_name', 'accuracy', 'avg_input_tokens', 'avg_output_tokens']].copy()
     latex_df.columns = ['Prompt Type', 'Accuracy', 'Avg Input Tokens', 'Avg Output Tokens']
     
-    # Format for LaTeX
-    latex_table = latex_df.to_latex(index=False, 
-                                     caption="Accuracy and Token Usage by Prompt Type",
-                                     label="tab:prompt_summary",
-                                     escape=False)
-    
+    # Format for LaTeX: only \caption, \label, tabular (no \begin{table}) so main.tex
+    # can wrap with \begin{table}[h]\centering\input{...}\end{table}
+    tabular_str = latex_df.to_latex(index=False, escape=False)
+    latex_table = "\\caption{Accuracy and Token Usage by Prompt Type}\n\\label{tab:prompt_summary}\n" + tabular_str
+
     output_path = os.path.join(output_dir, "summary_table.tex")
     with open(output_path, 'w') as f:
         f.write(latex_table)

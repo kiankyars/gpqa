@@ -56,7 +56,7 @@ In this paper, I seek to answer the question of whether forcing a model to adher
 Although it has been one year since the mainstream arrival of reasoning models, many aspects of their behavior are only understood weakly, and robust experimentation can strengthen our collective understanding. A better understanding on how prompting affects reasoning can help those using thinking models in their day-to-day workflow to better take advantage of them.
 
 \section{Related Work}
-Factory \cite{factory} showed that context compression hurts agentic behavior; I focus on \emph{output} formatting. GPQA Diamond is used in frontier model cards \cite{opus} as a high bar for expert-level reasoning.
+Factory showed that context compression hurts agentic behavior; I focus on \emph{output} formatting \cite{factory}. GPQA Diamond is used in frontier model cards as a high bar for expert-level reasoning \cite{opus}.
 
 \section{Methodology}
 
@@ -106,7 +106,7 @@ Figure~\ref{fig:token_usage} in Appendix~\ref{app:figures} shows token usage pat
 
 
 \section{Limitations}
-The study uses a single model (Claude Opus~4.5) and one benchmark (GPQA Diamond). Generalization to other reasoning models and benchmarks is unknown.
+The study uses a single model (Claude Opus 4.5) and one benchmark (GPQA Diamond). Generalization to other reasoning models and benchmarks is unknown.
 
 \section{Conclusion}
 What I conclude from this study is that unconstrained formatting gives higher accuracy on the reasoning benchmark tested. There does not seem to be a specific format constraint which lobotomizes the model more than others.
@@ -129,7 +129,7 @@ I thought of this idea after reading an article by Factory on the importance of 
 
 \section{Model and API Parameters}
 \label{app:params}
-I use the Messages API with: \texttt{model=claude-opus-4-5-20251101}; \texttt{thinking=\{type: enabled, budget\_tokens: 64000\}}; \texttt{output\_config.effort=high}; \texttt{max\_tokens=64000}. Betas: \texttt{interleaved-thinking-2025-05-14}, \texttt{effort-2025-11-24}. This matches the setup used for GPQA in the Opus~4.5 system card \cite{opus}.
+I use the Messages API with: \texttt{model=claude-opus-4-5-20251101}; \texttt{thinking=\{type: enabled, budget\_tokens: 64000\}}; \texttt{output\_config.effort=high}; \texttt{max\_tokens=64000}. Betas: \texttt{interleaved-thinking-2025-05-14}, \texttt{effort-2025-11-24}. This matches the setup used for GPQA in the Opus 4.5 system card \cite{opus}.
 
 \section{Accuracy by Subdomain and Prompt}
 \label{app:subdomain_prompt}
@@ -147,13 +147,6 @@ Code and prompts are available at \url{https://github.com/kiankyars/gpqa}. The s
   \caption{Accuracy with 95\% intervals by formatting constraint}
   \label{fig:accuracy_bars}
   \end{figure}
-
-\begin{figure}[h]
-  \centering
-  \includegraphics[width=0.8\textwidth]{../output/accuracy_with_error_bars.pdf}
-  \caption{Accuracy with 95\% intervals by formatting constraint}
-  \label{fig:accuracy_bars}
-\end{figure}
 
 %Bibliography
 \bibliographystyle{plain}

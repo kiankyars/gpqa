@@ -191,17 +191,25 @@ def analyze_errors_by_subdomain_and_prompt(df, output_dir="output"):
     print("=" * 80)
     print(acc.round(3).to_string())
     print("=" * 80 + "\n")
-    out_csv = os.path.join(output_dir, "accuracy_subdomain_prompt.csv")
-    acc.round(4).to_csv(out_csv)
-    print(f"Saved: {out_csv}")
+    # LaTeX: subdomain (index) x prompt columns, values as .3f
+    acc_tex = acc.round(3).map(lambda x: f"{x:.3f}").reset_index()
+    acc_tex = acc_tex.rename(columns={acc_tex.columns[0]: "Subdomain"})
+    latex_str = acc_tex.to_latex(
+        caption="Accuracy by subdomain and prompt type.",
+        label="tab:subdomain_prompt",
+        index=False,
+        escape=False,
+    )
+    out_tex = os.path.join(output_dir, "accuracy_subdomain_prompt.tex")
+    with open(out_tex, "w") as f:
+        f.write(latex_str)
+    print(f"Saved: {out_tex}")
     # Error counts for (subdomain, prompt) with most errors
     err = g.reset_index().nlargest(20, "errors")[["subdomain", "prompt", "errors", "n", "accuracy"]]
     err["prompt_name"] = err["prompt"].map(PROMPT_NAMES)
     print("\nTop 20 (subdomain, prompt) by error count:")
     print(err.to_string(index=False))
-    out_err = os.path.join(output_dir, "errors_subdomain_prompt.csv")
-    err.to_csv(out_err, index=False)
-    print(f"Saved: {out_err}\n")
+    print()
 
 
 def save_summary_table_latex(summary, output_dir="output"):
@@ -251,11 +259,7 @@ def main():
     save_summary_table_latex(summary)
 
     # Subdomain x prompt analysis
-    sub_path = Path("data/gpqa_with_subdomain.jsonl")
-    if sub_path.exists():
-        df_sub = load_results_jsonl(sub_path)
-        if "subdomain" in df_sub.columns and not df_sub["subdomain"].isna().all():
-            analyze_errors_by_subdomain_and_prompt(df_sub)
+    analyze_errors_by_subdomain_and_prompt(load_results_jsonl("data/gpqa_with_subdomain.jsonl"))
     
     print("\n" + "="*80)
     print("Analysis complete! All outputs saved to 'output/' directory")

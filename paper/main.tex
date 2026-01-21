@@ -13,6 +13,7 @@
 \usepackage{microtype}      % microtypography 
 \usepackage{fancyhdr}       % header
 \usepackage{graphicx}       % graphics
+\usepackage{float}          % [H] for figure placement
 \graphicspath{{media/}}     % organize your images and other figures under media/ folder
 
 %Header
@@ -96,6 +97,8 @@ Table~\ref{tab:prompt_summary} presents accuracy results. Anthropic reports 87.0
 
 \begin{table}[h]
 \centering
+\caption{Accuracy and Token Usage by Prompt Type}
+\label{tab:prompt_summary}
 \input{../output/summary_table.tex}
 \end{table}
 
@@ -122,11 +125,14 @@ It only arrived to me after completing the analysis that it is a good idea to te
 \section*{Acknowledgments}
 I thought of this idea after reading an article by Factory on the importance of context engineering for agentic performance and an article by Lennart Finke, this paper marries ideas from both \cite{factory,finke}.
 
+\clearpage
 \appendix
+\noindent{\LARGE\textbf{Appendix}}\par\vspace{0.5em}
+
 \section{Figures}
 \label{app:figures}
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \IfFileExists{../output/token_usage.pdf}{%
   \includegraphics[width=0.8\textwidth]{../output/token_usage.pdf}%
@@ -135,12 +141,23 @@ I thought of this idea after reading an article by Factory on the importance of 
 \label{fig:token_usage}
 \end{figure}
 
+\vspace{1.5em}
+\begin{figure}[H]
+\centering
+\IfFileExists{../output/accuracy_with_error_bars.pdf}{%
+  \includegraphics[width=0.8\textwidth]{../output/accuracy_with_error_bars.pdf}%
+}{\fbox{\parbox{0.6\textwidth}{\centering\small [accuracy\_with\_error\_bars.pdf]}}}
+\caption{Accuracy with 95\% intervals by formatting constraint}
+\label{fig:accuracy_bars}
+\end{figure}
+
 \section{Model and API Parameters}
 \label{app:params}
 I use the Messages API with: \texttt{model=claude-opus-4-5-20251101}; \texttt{thinking=\{type: enabled, budget\_tokens: 64000\}}; \texttt{output\_config.effort=high}; \texttt{max\_tokens=64000}. Betas: \texttt{interleaved-thinking-2025-05-14}, \texttt{effort-2025-11-24}. This matches the setup used for GPQA in the Opus 4.5 system card \cite{opus}.
 
 \section{Accuracy by Subdomain and Prompt}
 \label{app:subdomain_prompt}
+
 \input{../output/accuracy_subdomain_prompt.tex}
 
 \section{Data and Reproducibility}
@@ -150,15 +167,6 @@ The Hugging Face dataset \url{https://huggingface.co/datasets/kyars/gpqa-results
 \section{Prompts and Reproducibility}
 \label{app:prompts}
 Code and prompts are available at \url{https://github.com/kiankyars/gpqa}. The six prompt variants (Baseline, Strict JSON, Structural Rigidity, Python Code, Oulipo, Restricted Vocabulary) are defined in \texttt{main.py}.
-
-\begin{figure}[h]
-  \centering
-  \IfFileExists{../output/accuracy_with_error_bars.pdf}{%
-    \includegraphics[width=0.8\textwidth]{../output/accuracy_with_error_bars.pdf}%
-  }{\fbox{\parbox{0.6\textwidth}{\centering\small [accuracy\_with\_error\_bars.pdf]}}}
-  \caption{Accuracy with 95\% intervals by formatting constraint}
-  \label{fig:accuracy_bars}
-  \end{figure}
 
 %Bibliography
 \bibliographystyle{plain}

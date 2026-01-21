@@ -212,8 +212,9 @@ def process_batch_results(batch_id, examples, client):
     """Process batch results and extract answers."""
     processed = []
     for result in tqdm(client.messages.batches.results(batch_id), desc="Processing results"):
-        match = re.match(r'q(\d+)_p(\d+)_r(\d+)', result.custom_id)
-        # print(match, result.custom_id, result)
+        match = re.match(r'(?:smoke_test_)?q(\d+)_p(\d+)_r(\d+)', result.custom_id)
+        if not match:
+            continue
         question_id = int(match.group(1))
         prompt = int(match.group(2))
         repetition = int(match.group(3))
@@ -252,7 +253,7 @@ def save_results_jsonl(processed_results, filename):
 
 
 def main():
-    with logfire.span(f"Starting with model {MODEL}, prompts {PROMPTS:b}, repetitions {REPETITIONS}"):
+    with logfire.span(f"Starting with model {MODEL}, prompts {PROMPTS:b}, repetitions {REPETITIONS if len(sys.argv) == 3 and sys.argv[2] != "smoke" else 1}"):
         examples = load_gpqa_dataset()
         client = Anthropic()
         if sys.argv[1] == "submit":

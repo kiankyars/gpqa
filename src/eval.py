@@ -177,17 +177,6 @@ def plot_token_usage(df, output_dir="output"):
     plt.close()
 
 
-def load_results_with_subdomain(filepath=None, data_dir="data"):
-    """Load gpqa_with_subdomain.jsonl (has subdomain per row). Returns None if missing."""
-    path = Path(filepath) if filepath else Path(data_dir) / "gpqa_with_subdomain.jsonl"
-    if not path.exists():
-        return None
-    df = load_results_jsonl(path)
-    if "subdomain" not in df.columns or df["subdomain"].isna().all():
-        return None
-    return df
-
-
 def analyze_errors_by_subdomain_and_prompt(df, output_dir="output"):
     """Accuracy and error counts by subdomain x prompt. Requires df with 'subdomain'."""
     os.makedirs(output_dir, exist_ok=True)
@@ -261,10 +250,12 @@ def main():
     # Save LaTeX table
     save_summary_table_latex(summary)
 
-    # Subdomain x prompt analysis when gpqa_with_subdomain.jsonl exists
-    df_sub = load_results_with_subdomain()
-    if df_sub is not None:
-        analyze_errors_by_subdomain_and_prompt(df_sub)
+    # Subdomain x prompt analysis
+    sub_path = Path("data/gpqa_with_subdomain.jsonl")
+    if sub_path.exists():
+        df_sub = load_results_jsonl(sub_path)
+        if "subdomain" in df_sub.columns and not df_sub["subdomain"].isna().all():
+            analyze_errors_by_subdomain_and_prompt(df_sub)
     
     print("\n" + "="*80)
     print("Analysis complete! All outputs saved to 'output/' directory")

@@ -74,6 +74,27 @@ CHECKS = {
 }
 
 
+def violation_record(r, p):
+    """Build a minimal triplet for HF: question_id, prompt, repetition, response."""
+    rec = {
+        "question_id": r.get("question_id"),
+        "prompt": p,
+        "prompt_name": PROMPT_NAMES.get(p, CHECKS[p][0]),
+        "repetition": r.get("repetition"),
+        "response_text": r.get("response_text") or "",
+    }
+    # optional fields when present
+    if "subdomain" in r:
+        rec["subdomain"] = r["subdomain"]
+    if "correct_answer" in r:
+        rec["correct_answer"] = r["correct_answer"]
+    if "extracted_letter" in r:
+        rec["extracted_letter"] = r["extracted_letter"]
+    if "score" in r:
+        rec["score"] = r["score"]
+    return rec
+
+
 def main():
     path = sys.argv[1] if len(sys.argv) > 1 else "data/gpqa.jsonl"
     rows = [json.loads(ln) for ln in open(path)]
@@ -82,18 +103,31 @@ def main():
         p = int(r["prompt"])
         by_p.setdefault(p, []).append(r)
 
-    # JSON for legacy / programmatic use
-    out = {}
+    compliance = {}
+    violations_by_constraint = {}
     for p in sorted(CHECKS):
         _, fn = CHECKS[p]
         lst = by_p.get(p, [])
-        ok = sum(1 for r in lst if fn((r.get("response_text") or "")))
-        out[str(p)] = [ok, len(lst)]
+        ok = 0
+        viol = []
+        for r in lst:
+            text = r.get("response_text") or ""
+            if fn(text):
+                ok += 1
+            else:
+                viol.append(violation_record(r, p))
+        compliance[str(p)] = [ok, len(lst)]
+        violations_by_constraint[str(p)] = viol
+
+    out = {
+        "compliance": compliance,
+        "violations_by_constraint": violations_by_constraint,
+    }
 
     json_path = Path("data/test.json")
     json_path.parent.mkdir(parents=True, exist_ok=True)
     with open(json_path, "w") as f:
-        json.dump(out, f, separators=(',', ':'))
+        json.dump(out, f, indent=2)
 
     # LaTeX table to output/
     repo_root = Path(__file__).resolve().parent.parent
@@ -110,7 +144,7 @@ def main():
     ]
     for p in sorted(CHECKS):
         lst = by_p.get(p, [])
-        ok = out[str(p)][0]
+        ok = compliance[str(p)][0]
         n = len(lst)
         pct = (100.0 * ok / n) if n else 0.0
         name = PROMPT_NAMES.get(p, CHECKS[p][0])

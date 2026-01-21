@@ -103,7 +103,7 @@ Table~\ref{tab:prompt_summary} presents accuracy results.
 Figure~\ref{fig:token_usage} in Appendix~\ref{app:figures} shows token usage patterns across conditions. Structural Rigidity yields the feweest output tokens, consistent with the 20-word-per-bullet and three-bullet restriction.
 
 \subsection{Error Analysis}
-I measure format compliance with prompt-specific checks (e.g., parseable JSON for Strict JSON; absence of `e' for Oulipo; see \texttt{test.py}). Table~\ref{tab:compliance} reports the fraction of responses that followed each constraint. The Hugging Face dataset \url{https://huggingface.co/datasets/kyars/gpqa-results} contains the full 5,940 outputs (198 questions $\times$ 5 repetitions $\times$ 6 conditions) as well as the specific entries that violated each constraint (\texttt{violations\_by\_constraint}).
+I measure format compliance with prompt-specific checks (e.g., parseable JSON for Strict JSON; absence of `e' for Oulipo; see \texttt{test.py}). Table~\ref{tab:compliance} reports the fraction of responses that followed each constraint. Full outputs and violation records are in Appendix~\ref{app:data}.
 
 \begin{table}[h]
 \centering
@@ -139,6 +139,10 @@ I use the Messages API with: \texttt{model=claude-opus-4-5-20251101}; \texttt{th
 \section{Accuracy by Subdomain and Prompt}
 \label{app:subdomain_prompt}
 \input{../output/accuracy_subdomain_prompt.tex}
+
+\section{Data and Reproducibility}
+\label{app:data}
+The Hugging Face dataset \url{https://huggingface.co/datasets/kyars/gpqa-results} contains the full 5,940 outputs (198 questions $\times$ 5 repetitions $\times$ 6 conditions) and the specific entries that violated each constraint (\texttt{violations\_by\_constraint}).
 
 \section{Prompts and Reproducibility}
 \label{app:prompts}

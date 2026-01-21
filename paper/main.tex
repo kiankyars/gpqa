@@ -100,7 +100,7 @@ Table~\ref{tab:prompt_summary} presents accuracy results. Anthropic reports 87.0
 \end{table}
 
 \subsection{Token Usage Analysis}
-Figure~\ref{fig:token_usage} in Appendix~\ref{app:figures} shows token usage patterns across conditions. Structural Rigidity yields the feweest output tokens, consistent with the 20-word-per-bullet and three-bullet restriction.
+Figure~\ref{fig:token_usage} in Appendix~\ref{app:figures} shows token usage patterns across conditions. Structural Rigidity yields the feweest output tokens, consistent with the 20-word-per-bullet and three-bullet restriction. I did not hypothesize which restriction would lead to the most output tokens before the experiment, but the fact that it is Oulipo is not surprising, because it's the most restrictive of the six.
 
 \subsection{Error Analysis}
 I measure format compliance with prompt-specific checks (e.g., parseable JSON for Strict JSON; absence of `e' for Oulipo; see \texttt{test.py}). Table~\ref{tab:compliance} reports the fraction of responses that followed each constraint. Full outputs and violation records are in Appendix~\ref{app:data}.

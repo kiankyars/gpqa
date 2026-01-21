@@ -17,8 +17,8 @@ arxiv: build
 	sed 's|../output/|output/|g' arxiv-submit/$(MAIN).tex > arxiv-submit/$(MAIN).tex.tmp && mv arxiv-submit/$(MAIN).tex.tmp arxiv-submit/$(MAIN).tex
 	@[ -d media ] && cp -r media arxiv-submit/ || true
 	arxiv_latex_cleaner arxiv-submit --keep_bib --resize_images
-	tar -czvf output/arxiv-submit.tar.gz -C arxiv-submit .
+	tar -czvf ../output/arxiv-submit.tar.gz -C arxiv-submit .
 	@rm -rf arxiv-submit arxiv-submit_arXiv
-	@echo "Created arxiv-submit.tar.gz — upload to arXiv"
+	@echo "Created output/arxiv-submit.tar.gz — upload to arXiv"
 
 .PHONY: build arxiv clean

@@ -128,6 +128,9 @@ I thought of this idea after reading an article by Factory on the importance of 
 \label{app:params}
 I use the Messages API with: \texttt{model=claude-opus-4-5-20251101}; \texttt{thinking=\{type: enabled, budget\_tokens: 64000\}}; \texttt{output\_config.effort=high}; \texttt{max\_tokens=64000}. Betas: \texttt{interleaved-thinking-2025-05-14}, \texttt{effort-2025-11-24}. This matches the setup used for GPQA in the Opus~4.5 system card \cite{opus}.
 
+\section{Prompts and Reproducibility}
+\label{app:prompts}
+Code and prompts are available at \url{https://github.com/kiankyars/gpqa}. The six prompt variants (Baseline, Strict JSON, Structural Rigidity, Python Code, Oulipo, Restricted Vocabulary) are defined in \texttt{main.py}.
 
 %Bibliography
 \bibliographystyle{plain}

@@ -7,5 +7,17 @@ paper:
 - make / make build   # from repo root
 - make arxiv          # build + arxiv-latex-cleaner + tarball
 
-# batch API cost (50% off → /2e6): 198×30×((344·5+11529·25)/2e6). 30=6 prompts×5 reps; 5,25=$/M in,out; 344,11529=mean in,out tok/run from data
-198*30*((344*5+11529*25)/2E6)
+### Batch API cost (50% off → /2e6)
+
+```
+198 * 30 * ((344*5 + 11529*25) / 2e6)
+```
+
+| Symbol | Value | Meaning |
+|--------|-------|---------|
+| 198 | questions | GPQA Diamond |
+| 30 | 6×5 | prompts × reps |
+| 344 | tokens/run | mean input (from data) |
+| 11529 | tokens/run | mean output (from data) |
+| 5, 25 | $/M | Opus 4.5 input, output |
+| 2e6 | | per‑million × 2 (batch discount) |

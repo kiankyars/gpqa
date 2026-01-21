@@ -215,7 +215,8 @@ def process_batch_results(batch_id, examples, client):
         question_id = int(match.group(1))
         prompt = int(match.group(2))
         repetition = int(match.group(3))
-        response_text = next(block.text for block in result.result.message.content if block.type == "text")
+        text_blocks = [b.text for b in result.result.message.content if getattr(b, 'type', None) == "text"]
+        response_text = text_blocks[0] if text_blocks else ""
         extracted_letter = extract_answer_from_response(response_text, prompt)
         # this is the index of the correct answer
         correct_answer = examples[question_id].correct_index

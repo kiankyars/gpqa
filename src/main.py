@@ -7,7 +7,6 @@ from anthropic import Anthropic
 from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
 from anthropic.types.messages.batch_create_params import Request
 from datasets import load_dataset
-from tqdm import tqdm
 
 # Initialize Logfire and instrument Pydantic AI for token tracking
 logfire.configure()
@@ -211,10 +210,8 @@ def extract_answer_from_response(response_text: str, prompt: int) -> str | None:
 def process_batch_results(batch_id, examples, client):
     """Process batch results and extract answers."""
     processed = []
-    for result in tqdm(client.messages.batches.results(batch_id), desc="Processing results"):
+    for result in client.messages.batches.results(batch_id):
         match = re.match(r'(?:smoke_test_)?q(\d+)_p(\d+)_r(\d+)', result.custom_id)
-        if not match:
-            continue
         question_id = int(match.group(1))
         prompt = int(match.group(2))
         repetition = int(match.group(3))
@@ -253,21 +250,21 @@ def save_results_jsonl(processed_results, filename):
 
 
 def main():
-    with logfire.span(f"Starting with model {MODEL}, prompts {PROMPTS:b}, repetitions {REPETITIONS if len(sys.argv) == 3 and sys.argv[2] != "smoke" else 1}"):
-        examples = load_gpqa_dataset()
-        client = Anthropic()
-        if sys.argv[1] == "submit":
+    examples = load_gpqa_dataset()
+    client = Anthropic()
+    if sys.argv[1] == "submit":
+        with logfire.span(f"Starting with model {MODEL}, prompts {PROMPTS:b}, repetitions {REPETITIONS if len(sys.argv) == 3 and sys.argv[2] != "smoke" else 1}"):
             if sys.argv[2] == "smoke":
                 requests = create_smoke_test_request(examples[0], PROMPTS)
             elif sys.argv[2] == "full":
                 requests = create_batch_requests(examples, PROMPTS)
             submit_batch(requests, client)
-        else:
-            batch_id = sys.argv[1]
-            processed_results = process_batch_results(batch_id, examples, client)
-            # Save
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            save_results_jsonl(processed_results, f"results_{timestamp}_{PROMPTS}.jsonl")
+    else:
+        batch_id = sys.argv[1]
+        processed_results = process_batch_results(batch_id, examples, client)
+        # Save
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        save_results_jsonl(processed_results, f"results_{timestamp}_{PROMPTS}.jsonl")
 
 
 if __name__ == "__main__":

@@ -95,9 +95,9 @@ def main():
     with open(json_path, "w") as f:
         json.dump(out, f, separators=(',', ':'))
 
-    # LaTeX table to figures/
+    # LaTeX table to output/
     repo_root = Path(__file__).resolve().parent.parent
-    tex_path = repo_root / "figures" / "compliance_table.tex"
+    tex_path = repo_root / "output" / "compliance_table.tex"
     tex_path.parent.mkdir(parents=True, exist_ok=True)
 
     lines = [

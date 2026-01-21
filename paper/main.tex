@@ -96,7 +96,7 @@ Table~\ref{tab:prompt_summary} presents accuracy results.
 
 \begin{table}[h]
 \centering
-\input{../figures/summary_table.tex}
+\input{../output/summary_table.tex}
 \end{table}
 
 \subsection{Token Usage Analysis}
@@ -120,8 +120,8 @@ I thought of this idea after reading an article by Factory on the importance of 
 
 \begin{figure}[h]
 \centering
-\IfFileExists{../figures/token_usage.pdf}{%
-  \includegraphics[width=0.8\textwidth]{../figures/token_usage.pdf}%
+\IfFileExists{../output/token_usage.pdf}{%
+  \includegraphics[width=0.8\textwidth]{../output/token_usage.pdf}%
 }{\fbox{\parbox{0.6\textwidth}{\centering\small [token\_usage.pdf]}}}
 \caption{Token usage by formatting constraint}
 \label{fig:token_usage}
@@ -137,8 +137,8 @@ Code and prompts are available at \url{https://github.com/kiankyars/gpqa}. The s
 
 \begin{figure}[h]
   \centering
-  \IfFileExists{../figures/accuracy_with_error_bars.pdf}{%
-    \includegraphics[width=0.8\textwidth]{../figures/accuracy_with_error_bars.pdf}%
+  \IfFileExists{../output/accuracy_with_error_bars.pdf}{%
+    \includegraphics[width=0.8\textwidth]{../output/accuracy_with_error_bars.pdf}%
   }{\fbox{\parbox{0.6\textwidth}{\centering\small [accuracy\_with\_error\_bars.pdf]}}}
   \caption{Accuracy with 95\% intervals by formatting constraint}
   \label{fig:accuracy_bars}
@@ -146,7 +146,7 @@ Code and prompts are available at \url{https://github.com/kiankyars/gpqa}. The s
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.8\textwidth]{../figures/accuracy_with_error_bars.pdf}
+  \includegraphics[width=0.8\textwidth]{../output/accuracy_with_error_bars.pdf}
   \caption{Accuracy with 95\% intervals by formatting constraint}
   \label{fig:accuracy_bars}
 \end{figure}

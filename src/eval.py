@@ -85,7 +85,7 @@ def create_summary_table(df):
     return summary
 
 
-def plot_accuracy_with_error_bars(df, output_dir="figures"):
+def plot_accuracy_with_error_bars(df, output_dir="output"):
     """Create bar plot with error bars showing variance across repetitions."""
     os.makedirs(output_dir, exist_ok=True)
     
@@ -134,7 +134,7 @@ def plot_accuracy_with_error_bars(df, output_dir="figures"):
     plt.close()
 
 
-def plot_token_usage(df, output_dir="figures"):
+def plot_token_usage(df, output_dir="output"):
     """Create comparison of token usage by prompt."""
     os.makedirs(output_dir, exist_ok=True)
     
@@ -188,7 +188,7 @@ def load_results_with_subdomain(filepath=None, data_dir="data"):
     return df
 
 
-def analyze_errors_by_subdomain_and_prompt(df, output_dir="figures"):
+def analyze_errors_by_subdomain_and_prompt(df, output_dir="output"):
     """Accuracy and error counts by subdomain x prompt. Requires df with 'subdomain'."""
     os.makedirs(output_dir, exist_ok=True)
     g = df.groupby(["subdomain", "prompt"])["score"].agg(["mean", "sum", "count"])
@@ -215,7 +215,7 @@ def analyze_errors_by_subdomain_and_prompt(df, output_dir="figures"):
     print(f"Saved: {out_err}\n")
 
 
-def save_summary_table_latex(summary, output_dir="figures"):
+def save_summary_table_latex(summary, output_dir="output"):
     """Save summary table as LaTeX format with error bars."""
     os.makedirs(output_dir, exist_ok=True)
     
@@ -267,7 +267,7 @@ def main():
         analyze_errors_by_subdomain_and_prompt(df_sub)
     
     print("\n" + "="*80)
-    print("Analysis complete! All outputs saved to 'figures/' directory")
+    print("Analysis complete! All outputs saved to 'output/' directory")
     print("="*80)
 
 

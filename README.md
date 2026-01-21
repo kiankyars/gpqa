@@ -7,7 +7,7 @@ paper:
 - make / make build   # from repo root
 - make arxiv          # build + arxiv-latex-cleaner + tarball
 
-### Batch API cost (50% off → /2e6)
+### Batch API cost
 
 ```
 198 * 30 * ((344*5 + 11529*25) / 2e6)

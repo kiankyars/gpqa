@@ -3,8 +3,8 @@ import os
 from huggingface_hub import HfApi
 api = HfApi()
 
-def upload_results(file_name):
-    file_path = os.path.join("data", file_name)
+def upload_results(file_path):
+    api.create_repo("kyars/gpqa-results", exist_ok=True, repo_type="dataset")
     api.upload_file(
         path_or_fileobj=file_path,
         path_in_repo=os.path.basename(file_path),
